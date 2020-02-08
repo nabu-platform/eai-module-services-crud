@@ -37,13 +37,15 @@ import javafx.scene.control.TitledPane;
 import javafx.scene.layout.AnchorPane;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.Pane;
+import javafx.scene.layout.Priority;
+import javafx.scene.layout.VBox;
 import javafx.util.Callback;
 
 // for list, we could allow configuring a custom jdbc service? if relations get too complex, it might be necessary?
 public class CRUDArtifactGUIManager extends BaseJAXBGUIManager<CRUDConfiguration, CRUDArtifact> {
 
 	public CRUDArtifactGUIManager() {
-		super("CRUD Services", CRUDArtifact.class, new CRUDArtifactManager(), CRUDConfiguration.class);
+		super("CRUD", CRUDArtifact.class, new CRUDArtifactManager(), CRUDConfiguration.class);
 	}
 
 	@Override
@@ -55,7 +57,11 @@ public class CRUDArtifactGUIManager extends BaseJAXBGUIManager<CRUDConfiguration
 	protected CRUDArtifact newInstance(MainController controller, RepositoryEntry entry, Value<?>... values) throws IOException {
 		CRUDArtifact artifact = new CRUDArtifact(entry.getId(), entry.getContainer(), entry.getRepository());
 		if (values != null && values.length > 0) {
-			artifact.getConfig().setCoreType((DefinedType) values[0].getValue());
+			for (Value<?> value : values) {
+				if (value.getValue() instanceof DefinedType) {
+					artifact.getConfig().setCoreType((DefinedType) value.getValue());
+				}
+			}
 		}
 		if (artifact.getConfig().getCoreType() == null) {
 			throw new IllegalStateException("You need to define a type");
@@ -63,6 +69,11 @@ public class CRUDArtifactGUIManager extends BaseJAXBGUIManager<CRUDConfiguration
 		return artifact;
 	}
 
+	private void redraw(CRUDArtifact instance, Pane pane) {
+		pane.getChildren().removeAll();
+		display(instance, pane);
+	}
+	
 	@Override
 	protected void display(CRUDArtifact instance, Pane pane) {
 		// for list, create & update, we want to select the relevant fields to expose to the end user
@@ -87,7 +98,7 @@ public class CRUDArtifactGUIManager extends BaseJAXBGUIManager<CRUDConfiguration
 		populateList(instance, listPane);
 		listPane.getStyleClass().add("configuration-pane");
 		listPane.getStyleClass().add("configuration-pane-basic");
-		TitledPane list = new TitledPane("General", listPane);
+		TitledPane list = new TitledPane("List", listPane);
 		accordion.getPanes().add(list);
 		
 		pane.getChildren().add(accordion);
@@ -102,7 +113,7 @@ public class CRUDArtifactGUIManager extends BaseJAXBGUIManager<CRUDConfiguration
 	}
 	
 	private void populateGeneral(CRUDArtifact instance, Pane general) {
-		HBox main = new HBox();
+		VBox main = new VBox();
 		main.setPadding(new Insets(10));
 		
 		// add crud provider
@@ -165,12 +176,16 @@ public class CRUDArtifactGUIManager extends BaseJAXBGUIManager<CRUDConfiguration
 	}
 	
 	private void populateList(CRUDArtifact instance, Pane list) {
+		VBox main = new VBox();
+		main.setPadding(new Insets(10));
+		list.getChildren().add(main);
+		
 		if (instance.getConfig().getFilters() == null) {
 			instance.getConfig().setFilters(new ArrayList<CRUDFilter>());
 		}
-		Label label = new Label("List Filters");
-		HBox.setMargin(label, new Insets(10, 0, 10, 10));
-		list.getChildren().add(label);
+		Label label = new Label("Filters");
+		VBox.setMargin(label, new Insets(10, 0, 10, 10));
+		main.getChildren().add(label);
 		
 		// if you want to hardcode values, add it to the operator (for now)
 		// first we define the filters
@@ -186,8 +201,10 @@ public class CRUDArtifactGUIManager extends BaseJAXBGUIManager<CRUDConfiguration
 				}
 			});
 			ComboBox<String> operator = new ComboBox<String>();
+			HBox.setHgrow(operator, Priority.ALWAYS);
+			operator.setEditable(true);
 			operator.setValue(filter.getOperator());
-			operator.getItems().addAll("=", "<>", ">", "<", ">=", "<=", "is null", "is not null");
+			operator.getItems().addAll("=", "<>", ">", "<", ">=", "<=", "is null", "is not null", "like");
 			operator.valueProperty().addListener(new ChangeListener<String>() {
 				@Override
 				public void changed(ObservableValue<? extends String> arg0, String arg1, String arg2) {
@@ -215,7 +232,12 @@ public class CRUDArtifactGUIManager extends BaseJAXBGUIManager<CRUDConfiguration
 					MainController.getInstance().setChanged();
 				}
 			});
-			list.getChildren().addAll(filterBox, operator, input, remove);
+			HBox.setMargin(field, new Insets(10, 10, 10, 0));
+			HBox.setMargin(operator, new Insets(10));
+			HBox.setMargin(input, new Insets(10));
+			HBox.setMargin(remove, new Insets(10));
+			filterBox.getChildren().addAll(field, operator, input, remove);
+			main.getChildren().addAll(filterBox);
 		}
 		
 		// have a button to add a filter
@@ -230,21 +252,22 @@ public class CRUDArtifactGUIManager extends BaseJAXBGUIManager<CRUDConfiguration
 				MainController.getInstance().setChanged();
 			}
 		});
-		list.getChildren().add(add);
+		VBox.setMargin(add, new Insets(10, 0, 10, 0));
+		main.getChildren().add(add);
 		
 		// then checkboxes to choose the fields you want to blacklist
 		label = new Label("Choose the fields you want to blacklist from the resultset:");
-		HBox.setMargin(label, new Insets(10, 0, 10, 0));
-		list.getChildren().add(label);
+		VBox.setMargin(label, new Insets(10, 0, 10, 0));
+		main.getChildren().add(label);
 		if (instance.getConfig().getListFields() == null) {
 			instance.getConfig().setListFields(new ArrayList<String>());
 		}
-		populateChecklist(instance, list, instance.getConfig().getListFields());
+		populateChecklist(instance, main, instance.getConfig().getListFields());
 	}
 	
 	private void populateChecklist(CRUDArtifact instance, Pane pane, List<String> list, String...ignore) {
 		List<String> toIgnore = Arrays.asList(ignore);
-		HBox checkboxes = new HBox();
+		VBox checkboxes = new VBox();
 		for (String field : fields(instance)) {
 			if (toIgnore.indexOf(field) >= 0) {
 				continue;
@@ -284,5 +307,9 @@ public class CRUDArtifactGUIManager extends BaseJAXBGUIManager<CRUDConfiguration
 		ComboBox<String> fields = new ComboBox<String>();
 		fields.getItems().addAll(fields(instance));
 		return fields;
+	}
+	@Override
+	public String getCategory() {
+		return "Services";
 	}
 }
