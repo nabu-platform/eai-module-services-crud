@@ -146,9 +146,7 @@ public class CRUDArtifactGUIManager extends BaseJAXBGUIManager<CRUDConfiguration
 				MainController.getInstance().setChanged();
 			}
 		});
-		HBox parentFieldBox = EAIDeveloperUtils.newHBox("Parent Field", parentField);
-		MainController.getInstance().attachTooltip((Label) parentFieldBox.getChildren().get(0), "Configure the parent field for this type, this is relevant for listing and creating");
-		((Label) parentFieldBox.getChildren().get(0)).setAlignment(Pos.CENTER_LEFT);
+		HBox parentFieldBox = createField(parentField, "Parent Field", "Configure the parent field for this type, this is relevant for listing and creating");
 		main.getChildren().add(parentFieldBox);
 		
 		// list and create have security field of parent
@@ -159,6 +157,22 @@ public class CRUDArtifactGUIManager extends BaseJAXBGUIManager<CRUDConfiguration
 		
 		general.getChildren().add(main);
 		maximize(main);
+	}
+
+	private HBox createField(ComboBox<String> node, String title, String tooltip) {
+		HBox hbox = new HBox();
+		hbox.setPadding(new Insets(10, 0, 10, 0));
+		Label label = new Label(title + ":");
+		label.setPrefWidth(160);
+		label.setWrapText(true);
+		label.setAlignment(Pos.CENTER_LEFT);
+		label.setPadding(new Insets(4, 10, 0, 0));
+		HBox.setHgrow(label, Priority.SOMETIMES);
+		hbox.getChildren().addAll(label, node);
+		HBox.setHgrow(node, Priority.ALWAYS);
+		MainController.getInstance().attachTooltip(label, tooltip);
+		label.setStyle("-fx-text-fill: #666666");
+		return hbox;
 	}
 
 	private void populateCreate(CRUDArtifact instance, Pane pane) {
@@ -237,7 +251,23 @@ public class CRUDArtifactGUIManager extends BaseJAXBGUIManager<CRUDConfiguration
 		// first we define the filters
 		for (CRUDFilter filter : instance.getConfig().getFilters()) {
 			HBox filterBox = new HBox();
+			ComboBox<String> mainOperator = new ComboBox<String>();
+			mainOperator.getItems().addAll("and", "or");
+			if (filter.isOr()) {
+				mainOperator.getSelectionModel().select("or");
+			}
+			else {
+				mainOperator.getSelectionModel().select("and");
+			}
+			mainOperator.getSelectionModel().selectedItemProperty().addListener(new ChangeListener<String>() {
+				@Override
+				public void changed(ObservableValue<? extends String> arg0, String arg1, String arg2) {
+					filter.setOr(arg2 != null && arg2.equals("or"));
+					MainController.getInstance().setChanged();
+				}
+			});
 			TextField alias = new TextField();
+			alias.setPromptText("Alias");
 			alias.setText(filter.getAlias());
 			alias.textProperty().addListener(new ChangeListener<String>() {
 				@Override
@@ -276,7 +306,8 @@ public class CRUDArtifactGUIManager extends BaseJAXBGUIManager<CRUDConfiguration
 					MainController.getInstance().setChanged();
 				}
 			});
-			Button remove = new Button("Remove Filter");
+			HBox buttons = new HBox();
+			Button remove = new Button("Remove");
 			remove.addEventHandler(ActionEvent.ANY, new EventHandler<ActionEvent>() {
 				@Override
 				public void handle(ActionEvent arg0) {
@@ -287,12 +318,48 @@ public class CRUDArtifactGUIManager extends BaseJAXBGUIManager<CRUDConfiguration
 					MainController.getInstance().setChanged();
 				}
 			});
-			HBox.setMargin(alias, new Insets(10, 10, 10, 0));
+			Button up = new Button();
+			up.setGraphic(MainController.loadGraphic("move/up.png"));
+			up.addEventHandler(ActionEvent.ANY, new EventHandler<ActionEvent>() {
+				@Override
+				public void handle(ActionEvent arg0) {
+					int indexOf = instance.getConfig().getFilters().indexOf(filter);
+					if (indexOf > 0) {
+						instance.getConfig().getFilters().remove(indexOf);
+						instance.getConfig().getFilters().add(indexOf - 1, filter);
+					}
+					// redraw this section
+					list.getChildren().clear();
+					populateList(instance, list);
+					MainController.getInstance().setChanged();
+				}
+			});
+			
+			Button down = new Button();
+			down.setGraphic(MainController.loadGraphic("move/down.png"));
+			down.addEventHandler(ActionEvent.ANY, new EventHandler<ActionEvent>() {
+				@Override
+				public void handle(ActionEvent arg0) {
+					int indexOf = instance.getConfig().getFilters().indexOf(filter);
+					if (indexOf < instance.getConfig().getFilters().size() - 1) {
+						instance.getConfig().getFilters().remove(indexOf);
+						instance.getConfig().getFilters().add(indexOf + 1, filter);
+					}
+					// redraw this section
+					list.getChildren().clear();
+					populateList(instance, list);
+					MainController.getInstance().setChanged();
+				}
+			});
+			
+			buttons.getChildren().addAll(up, down, remove);
+			HBox.setMargin(mainOperator, new Insets(10, 10, 10, 0));
+			HBox.setMargin(alias, new Insets(10));
 			HBox.setMargin(field, new Insets(10));
 			HBox.setMargin(operator, new Insets(10));
 			HBox.setMargin(input, new Insets(10));
-			HBox.setMargin(remove, new Insets(10));
-			filterBox.getChildren().addAll(alias, field, operator, input, remove);
+			HBox.setMargin(buttons, new Insets(10));
+			filterBox.getChildren().addAll(mainOperator, alias, field, operator, input, buttons);
 			main.getChildren().addAll(filterBox);
 		}
 		

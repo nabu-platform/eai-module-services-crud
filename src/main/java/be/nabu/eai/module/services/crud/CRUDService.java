@@ -1,6 +1,7 @@
 package be.nabu.eai.module.services.crud;
 
 import java.util.ArrayList;
+import java.util.Date;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
@@ -24,15 +25,19 @@ import be.nabu.libs.types.base.ComplexElementImpl;
 import be.nabu.libs.types.base.SimpleElementImpl;
 import be.nabu.libs.types.base.ValueImpl;
 import be.nabu.libs.types.mask.MaskedContent;
+import be.nabu.libs.types.properties.GeneratedProperty;
 import be.nabu.libs.types.properties.MaxOccursProperty;
 import be.nabu.libs.types.properties.MinOccursProperty;
 import be.nabu.libs.types.properties.PrimaryKeyProperty;
-import be.nabu.libs.types.simple.Date;
 import be.nabu.libs.types.structure.DefinedStructure;
 import be.nabu.libs.types.structure.Structure;
 
 // TODO: allow orderby configuration
 // TODO: allow "soft" delete -> mark a field for soft deletion, always take it into effect when selecting and use it to perform a soft delete
+// to support cms nodes -> a) "managed" fields, the provider is extended with a "managed" fields option where you can add fields that will be automatically managed
+//		-> maybe include an extension requirement in this? basically we say you have to extend a certain document, we list fields from there
+// -> we want additional configuration (perhaps a configuration document that is configured in the provider?)
+// -> for example for CMS nodes you can configure the groups/roles etc
 public class CRUDService implements DefinedService {
 
 	private String id;
@@ -97,15 +102,15 @@ public class CRUDService implements DefinedService {
 					case DELETE: service = artifact.getConfig().getProvider().getConfig().getDeleteService(); break;
 					default: service = artifact.getConfig().getProvider().getConfig().getListService(); 
 				}
-				String connectionId = (String) input.get("connectionId");
-				String transactionId = (String) input.get("transactionId");
-				String language = (String) input.get("language");
+				String connectionId = input == null ? null : (String) input.get("connectionId");
+				String transactionId = input == null ? null : (String) input.get("transactionId");
+				String language = input == null ? null : (String) input.get("language");
 				
 				ComplexContent serviceInput = null;
 				Object object;
 				switch(type) {
 					case CREATE:
-						object = input.get("instance");
+						object = input == null ? null : input.get("instance");
 						if (object != null) {
 							if (!(object instanceof ComplexContent)) {
 								object = ComplexContentWrapperFactory.getInstance().getWrapper().wrap(object);
@@ -116,12 +121,12 @@ public class CRUDService implements DefinedService {
 						MaskedContent createInstance = new MaskedContent((ComplexContent) object, (ComplexType) artifact.getConfig().getCoreType());
 						for (Element<?> element : TypeUtils.getAllChildren((ComplexType) artifact.getConfig().getCoreType())) {
 							Value<Integer> minOccurs = element.getProperty(MinOccursProperty.getInstance());
-							Value<Boolean> generated = element.getProperty(PrimaryKeyProperty.getInstance());
+							Value<Boolean> generated = element.getProperty(GeneratedProperty.getInstance());
 							// we never mess with generated
 							if (generated != null && generated.getValue() != null && generated.getValue()) {
 								continue;
 							}
-							// if it is not listed in the create input (you choose to not expose it) and it is mandatory, we might need to add "some" value
+							// if it has no value and it is mandatory, we might need to add "some" value
 							else if (createInstance.get(element.getName()) == null && (minOccurs == null || minOccurs.getValue() == null || minOccurs.getValue() >= 1)) {
 								Value<Boolean> primary = element.getProperty(PrimaryKeyProperty.getInstance());
 								// if we have a primary key, we can generate a uuid (if it is a uuid)
@@ -143,7 +148,7 @@ public class CRUDService implements DefinedService {
 						serviceInput.set("changeTracker", artifact.getConfig().getChangeTracker() == null ? null : artifact.getConfig().getChangeTracker().getId());
 					break;
 					case UPDATE:
-						object = input.get("instance");
+						object = input == null ? null : input.get("instance");
 						if (object != null) {
 							if (!(object instanceof ComplexContent)) {
 								object = ComplexContentWrapperFactory.getInstance().getWrapper().wrap(object);
@@ -156,7 +161,7 @@ public class CRUDService implements DefinedService {
 						if (primary == null) {
 							throw new IllegalStateException("Could not find primary key field definition for updating");
 						}
-						Object updateId = input.get("id");
+						Object updateId = input == null ? null : input.get("id");
 						if (updateId == null) {
 							throw new IllegalStateException("Could not find primary key field value for updating");
 						}
@@ -181,7 +186,7 @@ public class CRUDService implements DefinedService {
 					break;
 					case DELETE:
 						serviceInput = artifact.getConfig().getProvider().getConfig().getDeleteService().getServiceInterface().getInputDefinition().newInstance();
-						Object deleteId = input.get("id");
+						Object deleteId = input == null ? null : input.get("id");
 						if (deleteId == null) {
 							throw new IllegalStateException("Could not find primary key field value for updating");
 						}
@@ -198,29 +203,42 @@ public class CRUDService implements DefinedService {
 						serviceInput.set("connectionId", connectionId);
 						serviceInput.set("transactionId", transactionId);
 						serviceInput.set("language", language);
-						serviceInput.set("limit", input.get("limit"));
-						serviceInput.set("offset", input.get("offset"));
-						serviceInput.set("orderBy", input.get("orderBy"));
+						serviceInput.set("limit", input == null ? null : input.get("limit"));
+						serviceInput.set("offset", input == null ? null : input.get("offset"));
+						serviceInput.set("orderBy", input == null ? null : input.get("orderBy"));
 						List<CRUDFilter> filters = new ArrayList<CRUDFilter>();
+						// the previous removed one
+						CRUDFilter removed = null;
 						if (artifact.getConfig().getFilters() != null) {
 							for (CRUDFilter filter : artifact.getConfig().getFilters()) {
 								CRUDFilter newFilter = new CRUDFilter();
 								newFilter.setCaseInsensitive(filter.isCaseInsensitive());
 								newFilter.setKey(filter.getKey());
 								newFilter.setOperator(filter.getOperator());
+								// if we removed the previous filter and it was an "and", we can't make this an or, cause the end result would not match
+								// if the previous one was also an or (removed or not), it doesn't matter
+								newFilter.setOr(filter.isOr() && (removed == null || removed.isOr()));
 								List<Object> values = new ArrayList<Object>();
 								newFilter.setValues(values);
 								if (filter.isInput()) {
-									Object inputtedValues = input.get(filter.getKey());
+									Object inputtedValues = input == null ? null : input.get("filter/" + (filter.getAlias() == null ? filter.getKey() : filter.getAlias()));
 									// could be a list or not a list
 									if (inputtedValues instanceof Iterable) {
 										for (Object inputtedValue : (Iterable<Object>) inputtedValues) {
 											values.add(inputtedValue);
 										}
 									}
-									else {
+									else if (inputtedValues != null) {
 										values.add(inputtedValues);
 									}
+								}
+								// if it is not an input, or actual input was provided, do it
+								if (!filter.isInput() || !values.isEmpty()) {
+									filters.add(newFilter);
+									removed = null;
+								}
+								else {
+									removed = filter;
 								}
 							}
 						}
@@ -242,7 +260,7 @@ public class CRUDService implements DefinedService {
 							}
 							// if we have a total row count, build the page object
 							if (result.getTotalRowCount() != null) {
-								output.set("page", Page.build(result.getTotalRowCount(), (Long) input.get("offset"), (Integer) input.get("limit")));
+								output.set("page", Page.build(result.getTotalRowCount(), input == null ? null : (Long) input.get("offset"), input == null ? null : (Integer) input.get("limit")));
 							}
 						}
 					break;
@@ -293,7 +311,7 @@ public class CRUDService implements DefinedService {
 						for (CRUDFilter filter : artifact.getConfig().getFilters()) {
 							if (filter.isInput()) {
 								Element<?> element = ((ComplexType) artifact.getConfig().getCoreType()).get(filter.getKey());
-								SimpleElementImpl childElement = new SimpleElementImpl(filter.getKey(), (SimpleType<?>) element.getType(), filters, new ValueImpl<Integer>(MinOccursProperty.getInstance(), 0));
+								SimpleElementImpl childElement = new SimpleElementImpl(filter.getAlias() == null ? filter.getKey() : filter.getAlias(), (SimpleType<?>) element.getType(), filters, new ValueImpl<Integer>(MinOccursProperty.getInstance(), 0));
 								// only for some filters do we support the list entries
 								if ("=".equals(filter.getOperator()) || "<>".equals(filter.getOperator())) {
 									childElement.setProperty(new ValueImpl<Integer>(MaxOccursProperty.getInstance(), 0));

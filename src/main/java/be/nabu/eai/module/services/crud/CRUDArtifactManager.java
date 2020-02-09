@@ -67,6 +67,9 @@ public class CRUDArtifactManager extends JAXBArtifactManager<CRUDConfiguration, 
 				// let's add to that
 				blacklist = blacklist == null ? new ArrayList<String>() : new ArrayList<String>(blacklist);
 				
+				if (artifact.getConfig().getUpdateRegenerateFields() != null) {
+					blacklist.removeAll(artifact.getConfig().getUpdateRegenerateFields());
+				}
 				// we create an intermediary update structure that contains all the fields you input as well as the fields we need to add to make it work (the primary key & any refreshable fields)
 				blacklist.addAll(getGenerated((ComplexType) artifact.getConfig().getCoreType()));
 				updateIntermediaryInput = addChild(entries, types, "updateIntermediaryInput", artifact.getConfig().getCoreType(), blacklist);
@@ -75,6 +78,9 @@ public class CRUDArtifactManager extends JAXBArtifactManager<CRUDConfiguration, 
 				// we don't need to blacklist again as we will build upon the intermediary
 				blacklist.clear();
 				blacklist.addAll(getPrimary((ComplexType) artifact.getConfig().getCoreType()));
+				if (artifact.getConfig().getUpdateRegenerateFields() != null) {
+					blacklist.addAll(artifact.getConfig().getUpdateRegenerateFields());
+				}
 				// add the fields we should regenerate (if any)
 				if (artifact.getConfig().getUpdateRegenerateFields() != null) {
 					blacklist.addAll(artifact.getConfig().getUpdateRegenerateFields());
