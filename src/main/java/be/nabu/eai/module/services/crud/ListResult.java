@@ -5,15 +5,13 @@ import java.util.List;
 public class ListResult {
 	private List<Object> results;
 	private Long rowCount, totalRowCount;
-	private Boolean hasNext;
 	public ListResult() {
 		// auto
 	}
-	public ListResult(List<Object> results, Long rowCount, Long totalRowCount, Boolean hasNext) {
+	public ListResult(List<Object> results, Long rowCount, Long totalRowCount) {
 		this.results = results;
 		this.rowCount = rowCount;
 		this.totalRowCount = totalRowCount;
-		this.hasNext = hasNext;
 	}
 	public Long getTotalRowCount() {
 		return totalRowCount;
@@ -26,12 +24,6 @@ public class ListResult {
 	}
 	public void setRowCount(Long rowCount) {
 		this.rowCount = rowCount;
-	}
-	public Boolean isHasNext() {
-		return hasNext;
-	}
-	public void setHasNext(Boolean hasNext) {
-		this.hasNext = hasNext;
 	}
 	public List<Object> getResults() {
 		return results;

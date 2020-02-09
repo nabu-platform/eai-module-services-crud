@@ -13,5 +13,5 @@ public class CRUDFilter extends Filter {
 	public void setInput(boolean input) {
 		this.input = input;
 	}
-	
+
 }

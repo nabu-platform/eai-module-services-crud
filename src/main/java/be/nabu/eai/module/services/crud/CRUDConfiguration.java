@@ -5,8 +5,10 @@ import java.util.List;
 import javax.xml.bind.annotation.XmlRootElement;
 import javax.xml.bind.annotation.adapters.XmlJavaTypeAdapter;
 
+import be.nabu.eai.api.InterfaceFilter;
 import be.nabu.eai.module.services.crud.provider.CRUDProviderArtifact;
 import be.nabu.eai.repository.jaxb.ArtifactXMLAdapter;
+import be.nabu.libs.services.api.DefinedService;
 import be.nabu.libs.types.api.DefinedType;
 
 @XmlRootElement(name = "crud")
@@ -16,8 +18,10 @@ public class CRUDConfiguration {
 	
 	private CRUDProviderArtifact provider;
 	
-	// the fields we want to expose for creation and/or updates
-	private List<String> createFields, updateFields, listFields;
+	private DefinedService changeTracker;
+	
+	// the fields we want to blacklist for creation and/or updates
+	private List<String> createBlacklistFields, updateBlacklistFields, listBlacklistFields, updateRegenerateFields;
 	
 	// the field we want to use to check security context
 	private String securityContextField, parentField;
@@ -29,6 +33,15 @@ public class CRUDConfiguration {
 	
 	private String basePath;
 
+	@InterfaceFilter(implement = "be.nabu.libs.services.jdbc.api.ChangeTracker.track")
+	@XmlJavaTypeAdapter(value = ArtifactXMLAdapter.class)
+	public DefinedService getChangeTracker() {
+		return changeTracker;
+	}
+	public void setChangeTracker(DefinedService changeTracker) {
+		this.changeTracker = changeTracker;
+	}
+	
 	@XmlJavaTypeAdapter(value = ArtifactXMLAdapter.class)
 	public CRUDProviderArtifact getProvider() {
 		return provider;
@@ -44,18 +57,18 @@ public class CRUDConfiguration {
 		this.coreType = coreType;
 	}
 
-	public List<String> getCreateFields() {
-		return createFields;
+	public List<String> getCreateBlacklistFields() {
+		return createBlacklistFields;
 	}
-	public void setCreateFields(List<String> createFields) {
-		this.createFields = createFields;
+	public void setCreateBlacklistFields(List<String> createFields) {
+		this.createBlacklistFields = createFields;
 	}
 
-	public List<String> getUpdateFields() {
-		return updateFields;
+	public List<String> getUpdateBlacklistFields() {
+		return updateBlacklistFields;
 	}
-	public void setUpdateFields(List<String> updateFields) {
-		this.updateFields = updateFields;
+	public void setUpdateBlacklistFields(List<String> updateFields) {
+		this.updateBlacklistFields = updateFields;
 	}
 
 	public String getSecurityContextField() {
@@ -104,17 +117,23 @@ public class CRUDConfiguration {
 	public void setParentField(String parentField) {
 		this.parentField = parentField;
 	}
-	public List<String> getListFields() {
-		return listFields;
+	public List<String> getListBlacklistFields() {
+		return listBlacklistFields;
 	}
-	public void setListFields(List<String> listFields) {
-		this.listFields = listFields;
+	public void setListBlacklistFields(List<String> listFields) {
+		this.listBlacklistFields = listFields;
 	}
 	public List<CRUDFilter> getFilters() {
 		return filters;
 	}
 	public void setFilters(List<CRUDFilter> filters) {
 		this.filters = filters;
+	}
+	public List<String> getUpdateRegenerateFields() {
+		return updateRegenerateFields;
+	}
+	public void setUpdateRegenerateFields(List<String> updateRegenerateFields) {
+		this.updateRegenerateFields = updateRegenerateFields;
 	}
 	
 }

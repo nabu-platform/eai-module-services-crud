@@ -15,8 +15,8 @@ public interface CRUDProvider {
 	public ListResult list(@WebParam(name = "connectionId") String connectionId,
 			@WebParam(name = "transactionId") String transactionId,
 			// the id of the type we are querying
-			@WebParam(name = "definitionId") String definitionId,
-			@WebParam(name = "limit") Long limit, 
+			@WebParam(name = "typeId") String typeId,
+			@WebParam(name = "limit") Integer limit, 
 			@WebParam(name = "offset") Long offset, 
 			@WebParam(name = "orderBy") List<String> orderBy, 
 			@WebParam(name = "filters") List<CRUDFilter> filters,
@@ -24,17 +24,21 @@ public interface CRUDProvider {
 	
 	public void create(@WebParam(name = "connectionId") String connectionId,
 			@WebParam(name = "transactionId") String transactionId,
-			@WebParam(name = "object") Object object,
-			@WebParam(name = "language") String language);
+			@WebParam(name = "instance") Object object,
+			@WebParam(name = "language") String language,
+			@WebParam(name = "changeTracker") String changeTracker);
 	
 	public void update(@WebParam(name = "connectionId") String connectionId,
 			@WebParam(name = "transactionId") String transactionId,
-			@WebParam(name = "object") Object object,
-			@WebParam(name = "language") String language);
+			@WebParam(name = "instance") Object object,
+			@WebParam(name = "language") String language,
+			@WebParam(name = "changeTracker") String changeTracker);
 	
 	public void delete(@WebParam(name = "connectionId") String connectionId,
 			@WebParam(name = "transactionId") String transactionId,
-			@WebParam(name = "object") Object object,
-			@WebParam(name = "language") String language);
+			@WebParam(name = "typeId") String typeId,
+			@WebParam(name = "id") Object id,
+			@WebParam(name = "language") String language,
+			@WebParam(name = "changeTracker") String changeTracker);
 
 }

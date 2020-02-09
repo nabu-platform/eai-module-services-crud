@@ -259,10 +259,10 @@ public class CRUDArtifactGUIManager extends BaseJAXBGUIManager<CRUDConfiguration
 		label = new Label("Choose the fields you want to blacklist from the resultset:");
 		VBox.setMargin(label, new Insets(10, 0, 10, 0));
 		main.getChildren().add(label);
-		if (instance.getConfig().getListFields() == null) {
-			instance.getConfig().setListFields(new ArrayList<String>());
+		if (instance.getConfig().getListBlacklistFields() == null) {
+			instance.getConfig().setListBlacklistFields(new ArrayList<String>());
 		}
-		populateChecklist(instance, main, instance.getConfig().getListFields());
+		populateChecklist(instance, main, instance.getConfig().getListBlacklistFields());
 	}
 	
 	private void populateChecklist(CRUDArtifact instance, Pane pane, List<String> list, String...ignore) {
