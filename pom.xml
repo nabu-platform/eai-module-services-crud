@@ -67,6 +67,11 @@
 			<artifactId>eai-module-rest-provider</artifactId>
 			<scope>provided</scope>
 		</dependency>
+		<dependency>
+			<groupId>nabu</groupId>
+			<artifactId>eai-module-http-server</artifactId>
+			<scope>provided</scope>
+		</dependency>
 	</dependencies>
 
 </project>

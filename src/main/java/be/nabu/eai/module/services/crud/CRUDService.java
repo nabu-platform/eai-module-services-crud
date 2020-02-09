@@ -1,11 +1,29 @@
 package be.nabu.eai.module.services.crud;
 
+import java.io.IOException;
+import java.nio.charset.Charset;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Date;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 
+import be.nabu.eai.module.rest.provider.RESTFragmentListener;
+import be.nabu.eai.module.rest.provider.RESTService.PermissionImplementation;
+import be.nabu.eai.module.rest.provider.iface.RESTInterfaceArtifact;
+import be.nabu.eai.module.web.application.WebApplication;
+import be.nabu.eai.module.web.application.WebFragment;
+import be.nabu.eai.module.web.application.api.PermissionWithRole;
+import be.nabu.eai.module.web.application.api.RESTFragment;
+import be.nabu.eai.repository.EAIResourceRepository;
+import be.nabu.libs.authentication.api.Permission;
+import be.nabu.libs.events.api.EventSubscription;
+import be.nabu.libs.http.api.HTTPRequest;
+import be.nabu.libs.http.api.HTTPResponse;
+import be.nabu.libs.http.server.HTTPServerUtils;
 import be.nabu.libs.property.api.Value;
 import be.nabu.libs.services.ServiceRuntime;
 import be.nabu.libs.services.api.DefinedService;
@@ -21,6 +39,7 @@ import be.nabu.libs.types.api.ComplexContent;
 import be.nabu.libs.types.api.ComplexType;
 import be.nabu.libs.types.api.Element;
 import be.nabu.libs.types.api.SimpleType;
+import be.nabu.libs.types.api.Type;
 import be.nabu.libs.types.base.ComplexElementImpl;
 import be.nabu.libs.types.base.SimpleElementImpl;
 import be.nabu.libs.types.base.ValueImpl;
@@ -38,7 +57,7 @@ import be.nabu.libs.types.structure.Structure;
 //		-> maybe include an extension requirement in this? basically we say you have to extend a certain document, we list fields from there
 // -> we want additional configuration (perhaps a configuration document that is configured in the provider?)
 // -> for example for CMS nodes you can configure the groups/roles etc
-public class CRUDService implements DefinedService {
+public class CRUDService implements DefinedService, WebFragment, RESTFragment {
 
 	private String id;
 	private CRUDType type;
@@ -75,11 +94,11 @@ public class CRUDService implements DefinedService {
 			}
 			@Override
 			public ComplexType getOutputDefinition() {
-				return getOutput();
+				return getDefinedOutput();
 			}
 			@Override
 			public ComplexType getInputDefinition() {
-				return getInput();
+				return getDefinedInput();
 			}
 		};
 	}
@@ -281,7 +300,7 @@ public class CRUDService implements DefinedService {
 	}
 
 	@SuppressWarnings({ "unchecked", "rawtypes" })
-	private Structure getInput() {
+	private Structure getDefinedInput() {
 		if (input == null) {
 			Structure input = new Structure();
 			input.setName("input");
@@ -339,7 +358,7 @@ public class CRUDService implements DefinedService {
 		return null;
 	}
 	
-	private Structure getOutput() {
+	private Structure getDefinedOutput() {
 		if (output == null) {
 			Structure output = new Structure();
 			output.setName("output");
@@ -353,5 +372,257 @@ public class CRUDService implements DefinedService {
 			this.output = output;
 		}
 		return output;
+	}
+	
+	private Map<String, EventSubscription<?, ?>> subscriptions = new HashMap<String, EventSubscription<?, ?>>();
+
+	private String getKey(WebApplication artifact, String path) {
+		return artifact.getId() + ":" + path;
+	}
+	
+	public CRUDType getType() {
+		return type;
+	}
+
+	@Override
+	public void start(WebApplication artifact, String path) throws IOException {
+		String key = getKey(artifact, path);
+		if (subscriptions.containsKey(key)) {
+			stop(artifact, path);
+		}
+		String restPath = artifact.getServerPath();
+		if (path != null && !path.isEmpty() && !path.equals("/")) {
+			if (!restPath.endsWith("/")) {
+				restPath += "/";
+			}
+			restPath += path.replaceFirst("^[/]+", "");
+		}
+		String parentPath = restPath;
+		if (this.artifact.getConfig().getBasePath() != null) {
+			if (!restPath.endsWith("/")) {
+				restPath += "/";
+			}
+			restPath += this.artifact.getConfig().getBasePath().replaceFirst("^[/]+", "");
+		}
+		synchronized(subscriptions) {
+			CRUDListener listener = new CRUDListener(artifact, this.artifact, this, parentPath, getPath());
+			EventSubscription<HTTPRequest, HTTPResponse> subscription = artifact.getDispatcher().subscribe(HTTPRequest.class, listener);
+			subscription.filter(HTTPServerUtils.limitToPath(restPath));
+			subscriptions.put(key, subscription);
+		}
+	}
+
+	@Override
+	public void stop(WebApplication artifact, String path) {
+		String key = getKey(artifact, path);
+		if (subscriptions.containsKey(key)) {
+			synchronized(subscriptions) {
+				if (subscriptions.containsKey(key)) {
+					subscriptions.get(key).unsubscribe();
+					subscriptions.remove(key);
+				}
+			}
+		}
+	}
+	
+	@Override
+	public String getPermissionAction() {
+		String name = getName();
+		switch (type) {
+			case CREATE:
+				return name + ".create";
+			case DELETE: 
+				return name + ".delete";
+			case LIST:
+				return name + ".list";
+			case UPDATE:
+				return name + ".update";
+		}
+		return null;
+	}
+
+	@Override
+	public List<Permission> getPermissions(WebApplication artifact, String path) {
+		List<Permission> permissions = new ArrayList<Permission>();
+		String name = getName();
+		switch (type) {
+			case CREATE:
+				permissions.add(new PermissionImplementation(null, name + ".create", this.artifact.getConfig().getCreateRole()));
+			break;
+			case DELETE: 
+				permissions.add(new PermissionImplementation(null, name + ".delete", this.artifact.getConfig().getDeleteRole()));
+			break;
+			case LIST:
+				permissions.add(new PermissionImplementation(null, name + ".list", this.artifact.getConfig().getListRole()));
+			break;
+			case UPDATE:
+				permissions.add(new PermissionImplementation(null, name + ".update", this.artifact.getConfig().getUpdateRole()));
+			break;
+		}
+		return permissions;
+	}
+
+	@Override
+	public boolean isStarted(WebApplication artifact, String path) {
+		return subscriptions.containsKey(getKey(artifact, path));
+	}
+	
+	public static class PermissionImplementation implements PermissionWithRole {
+		
+		private String context;
+		private String action;
+		private List<String> roles;
+
+		public PermissionImplementation() {
+			// auto
+		}
+		
+		public PermissionImplementation(String context, String action, List<String> roles) {
+			this.context = context;
+			this.action = action;
+			this.roles = roles;
+		}
+		
+		@Override
+		public String getContext() {
+			return context;
+		}
+
+		public void setContext(String context) {
+			this.context = context;
+		}
+
+		@Override
+		public String getAction() {
+			return action;
+		}
+		public void setAction(String action) {
+			this.action = action;
+		}
+
+		@Override
+		public List<String> getRoles() {
+			return roles;
+		}
+		public void setRoles(List<String> roles) {
+			this.roles = roles;
+		}
+	}
+	
+	private String getName() {
+		String name = artifact.getConfig().getName();
+		if (name == null || name.trim().isEmpty()) {
+			name = artifact.getConfig().getCoreType().getName();
+		}
+		return name;
+	}
+
+	@Override
+	public String getPath() {
+		String path = artifact.getConfig().getBasePath() == null ? "" : artifact.getConfig().getBasePath();
+		if (!path.isEmpty() && !path.endsWith("/")) { 
+			path += "/";
+		}
+		switch(type) {
+			case UPDATE:
+			case DELETE:
+				return path + getName() + "/{id}";
+			default:
+				if (artifact.getConfig().getParentName() != null) {
+					path += artifact.getConfig().getParentName() + "/";
+				}
+				if (artifact.getConfig().getParentField() != null) {
+					path += "{parentId}/";
+				}
+				path += getName();
+				return path;
+		}
+	}
+
+	@Override
+	public String getMethod() {
+		switch(type) {
+			case CREATE: return "POST";
+			case UPDATE: return "PUT";
+			case DELETE: return "DELETE";
+			default: return "GET";
+		}
+	}
+
+	@Override
+	public List<String> getConsumes() {
+		return Arrays.asList("application/json", "application/xml");
+	}
+
+	@Override
+	public List<String> getProduces() {
+		return Arrays.asList("application/json", "application/xml");
+	}
+
+	@Override
+	public Type getInput() {
+		switch(type) {
+			case CREATE: return createInput;
+			case UPDATE: return updateInput;
+			default: return null;
+		}
+	}
+
+	@Override
+	public Type getOutput() {
+		switch (type) {
+			case LIST: return outputList;
+			default: return null;
+		}
+	}
+
+	@SuppressWarnings({ "unchecked", "rawtypes" })
+	@Override
+	public List<Element<?>> getQueryParameters() {
+		List<Element<?>> parameters = new ArrayList<Element<?>>();
+		// only the list has query parameters
+		if (type == CRUDType.LIST) {
+			Structure input = new Structure();
+			parameters.add(new SimpleElementImpl<Integer>("limit", SimpleTypeWrapperFactory.getInstance().getWrapper().wrap(Integer.class), input, new ValueImpl<Integer>(MinOccursProperty.getInstance(), 0)));
+			parameters.add(new SimpleElementImpl<Long>("offset", SimpleTypeWrapperFactory.getInstance().getWrapper().wrap(Long.class), input, new ValueImpl<Integer>(MinOccursProperty.getInstance(), 0)));
+			parameters.add(new SimpleElementImpl<String>("orderBy", SimpleTypeWrapperFactory.getInstance().getWrapper().wrap(String.class), input, new ValueImpl<Integer>(MinOccursProperty.getInstance(), 0), new ValueImpl<Integer>(MaxOccursProperty.getInstance(), 0)));
+			if (artifact.getConfig().getFilters() != null) {
+				for (CRUDFilter filter : artifact.getConfig().getFilters()) {
+					if (filter.isInput()) {
+						Element<?> element = ((ComplexType) artifact.getConfig().getCoreType()).get(filter.getKey());
+						SimpleElementImpl childElement = new SimpleElementImpl(filter.getAlias() == null ? filter.getKey() : filter.getAlias(), (SimpleType<?>) element.getType(), input, new ValueImpl<Integer>(MinOccursProperty.getInstance(), 0));
+						// only for some filters do we support the list entries
+						if ("=".equals(filter.getOperator()) || "<>".equals(filter.getOperator())) {
+							childElement.setProperty(new ValueImpl<Integer>(MaxOccursProperty.getInstance(), 0));
+						}
+						parameters.add(childElement);
+					}
+				}
+			}
+		}
+		return parameters;
+	}
+
+	@Override
+	public List<Element<?>> getHeaderParameters() {
+		return null;
+	}
+
+	@SuppressWarnings({ "unchecked", "rawtypes" })
+	@Override
+	public List<Element<?>> getPathParameters() {
+		Structure input = new Structure();
+		List<Element<?>> parameters = new ArrayList<Element<?>>();
+		Element<?> primary = getPrimary((ComplexType) artifact.getConfig().getCoreType());
+		Element<?> parent = artifact.getConfig().getParentField() == null ? null : ((ComplexType) artifact.getConfig().getCoreType()).get(artifact.getConfig().getParentField());
+		switch(type) {
+			case DELETE: 
+			case UPDATE: parameters.add(new SimpleElementImpl("id", (SimpleType) primary.getType(), input)); break;
+			default: 
+				if (parent != null) {
+					parameters.add(new SimpleElementImpl("parentId", (SimpleType) parent.getType(), input));
+				}
+		}
+		return parameters;
 	}
 }

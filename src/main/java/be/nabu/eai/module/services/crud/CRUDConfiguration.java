@@ -27,11 +27,14 @@ public class CRUDConfiguration {
 	private String securityContextField, parentField;
 	
 	// we can also set roles
-	private String createRole, updateRole, listRole, deleteRole;
+	private List<String> createRole, updateRole, listRole, deleteRole;
 	
 	private List<CRUDFilter> filters;
 	
-	private String basePath;
+	// the name is necessary for some things like permissions, components...
+	// if none is set, we assume the root name of the document
+	// the parent name might also we relevant for example for paths
+	private String basePath, name, parentName;
 
 	@InterfaceFilter(implement = "be.nabu.libs.services.jdbc.api.ChangeTracker.track")
 	@XmlJavaTypeAdapter(value = ArtifactXMLAdapter.class)
@@ -77,32 +80,28 @@ public class CRUDConfiguration {
 	public void setSecurityContextField(String securityContextField) {
 		this.securityContextField = securityContextField;
 	}
-
-	public String getCreateRole() {
+	public List<String> getCreateRole() {
 		return createRole;
 	}
-	public void setCreateRole(String createRole) {
+	public void setCreateRole(List<String> createRole) {
 		this.createRole = createRole;
 	}
-
-	public String getUpdateRole() {
+	public List<String> getUpdateRole() {
 		return updateRole;
 	}
-	public void setUpdateRole(String updateRole) {
+	public void setUpdateRole(List<String> updateRole) {
 		this.updateRole = updateRole;
 	}
-
-	public String getListRole() {
+	public List<String> getListRole() {
 		return listRole;
 	}
-	public void setListRole(String listRole) {
+	public void setListRole(List<String> listRole) {
 		this.listRole = listRole;
 	}
-
-	public String getDeleteRole() {
+	public List<String> getDeleteRole() {
 		return deleteRole;
 	}
-	public void setDeleteRole(String deleteRole) {
+	public void setDeleteRole(List<String> deleteRole) {
 		this.deleteRole = deleteRole;
 	}
 	public String getBasePath() {
@@ -135,5 +134,16 @@ public class CRUDConfiguration {
 	public void setUpdateRegenerateFields(List<String> updateRegenerateFields) {
 		this.updateRegenerateFields = updateRegenerateFields;
 	}
-	
+	public String getName() {
+		return name;
+	}
+	public void setName(String name) {
+		this.name = name;
+	}
+	public String getParentName() {
+		return parentName;
+	}
+	public void setParentName(String parentName) {
+		this.parentName = parentName;
+	}
 }
