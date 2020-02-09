@@ -93,9 +93,10 @@ public class CRUDArtifactManager extends JAXBArtifactManager<CRUDConfiguration, 
 				synchronize(output, (ComplexType) artifact.getConfig().getCoreType());
 				
 				outputList = new DefinedStructure();
+				outputList.setName(artifact.getConfig().getCoreType().getName() + "List");
 				outputList.setId(types.getId() + ".outputList");
 				outputList.add(new ComplexElementImpl("results", output, outputList, new ValueImpl<Integer>(MinOccursProperty.getInstance(), 0), new ValueImpl<Integer>(MaxOccursProperty.getInstance(), 0)));
-				outputList.add(new ComplexElementImpl("page", (ComplexType) BeanResolver.getInstance().resolve(Page.class), outputList, new ValueImpl<Integer>(MaxOccursProperty.getInstance(), 0)));
+				outputList.add(new ComplexElementImpl("page", (ComplexType) BeanResolver.getInstance().resolve(Page.class), outputList, new ValueImpl<Integer>(MinOccursProperty.getInstance(), 0)));
 				EAINode node = new EAINode();
 				node.setArtifactClass(DefinedStructure.class);
 				node.setArtifact(outputList);
@@ -111,12 +112,12 @@ public class CRUDArtifactManager extends JAXBArtifactManager<CRUDConfiguration, 
 				addChild(entries, services, "create", new CRUDService(artifact, services.getId() + ".create", CRUDType.CREATE, createInput, updateInput, outputList, updateIntermediaryInput));
 			}
 			if (artifact.getConfig().getProvider() != null && artifact.getConfig().getProvider().getConfig().getUpdateService() != null) {
-				addChild(entries, services, "update", new CRUDService(artifact, services.getId() + ".create", CRUDType.UPDATE, createInput, updateInput, outputList, updateIntermediaryInput));
+				addChild(entries, services, "update", new CRUDService(artifact, services.getId() + ".update", CRUDType.UPDATE, createInput, updateInput, outputList, updateIntermediaryInput));
 			}
 			if (artifact.getConfig().getProvider() != null && artifact.getConfig().getProvider().getConfig().getListService() != null) {
-				addChild(entries, services, "read", new CRUDService(artifact, services.getId() + ".read", CRUDType.READ, createInput, updateInput, outputList, updateIntermediaryInput));
+				addChild(entries, services, "list", new CRUDService(artifact, services.getId() + ".list", CRUDType.LIST, createInput, updateInput, outputList, updateIntermediaryInput));
 			}
-			if (artifact.getConfig().getProvider() != null && artifact.getConfig().getProvider().getConfig().getListService() != null) {
+			if (artifact.getConfig().getProvider() != null && artifact.getConfig().getProvider().getConfig().getDeleteService() != null) {
 				addChild(entries, services, "delete", new CRUDService(artifact, services.getId() + ".delete", CRUDType.DELETE, createInput, updateInput, outputList, updateIntermediaryInput));
 			}
 		}
@@ -132,7 +133,7 @@ public class CRUDArtifactManager extends JAXBArtifactManager<CRUDConfiguration, 
 		}
 	}
 	
-	private List<String> getPrimary(ComplexType parent) {
+	static List<String> getPrimary(ComplexType parent) {
 		List<String> primaries = new ArrayList<String>();
 		for (Element<?> element : TypeUtils.getAllChildren(parent)) {
 			Value<Boolean> property = element.getProperty(PrimaryKeyProperty.getInstance());
@@ -143,7 +144,7 @@ public class CRUDArtifactManager extends JAXBArtifactManager<CRUDConfiguration, 
 		return primaries;
 	}
 	
-	private List<String> getGenerated(ComplexType parent) {
+	static List<String> getGenerated(ComplexType parent) {
 		List<String> generated = new ArrayList<String>();
 		for (Element<?> element : TypeUtils.getAllChildren(parent)) {
 			Value<Boolean> property = element.getProperty(GeneratedProperty.getInstance());
@@ -156,7 +157,7 @@ public class CRUDArtifactManager extends JAXBArtifactManager<CRUDConfiguration, 
 	
 	private void addChild(List<Entry> entries, ModifiableEntry services, String name, DefinedService service) {
 		EAINode node = new EAINode();
-		node.setArtifactClass(DefinedStructure.class);
+		node.setArtifactClass(DefinedService.class);
 		node.setArtifact(service);
 		node.setLeaf(true);
 		Entry childEntry = new MemoryEntry(services.getRepository(), services, node, service.getId(), name);

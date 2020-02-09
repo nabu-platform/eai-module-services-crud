@@ -32,6 +32,7 @@ import be.nabu.libs.types.structure.DefinedStructure;
 import be.nabu.libs.types.structure.Structure;
 
 // TODO: allow orderby configuration
+// TODO: allow "soft" delete -> mark a field for soft deletion, always take it into effect when selecting and use it to perform a soft delete
 public class CRUDService implements DefinedService {
 
 	private String id;
@@ -45,7 +46,7 @@ public class CRUDService implements DefinedService {
 	
 	public enum CRUDType {
 		CREATE,
-		READ,
+		LIST,
 		UPDATE,
 		DELETE
 	}
@@ -69,7 +70,7 @@ public class CRUDService implements DefinedService {
 			}
 			@Override
 			public ComplexType getOutputDefinition() {
-				return getInput();
+				return getOutput();
 			}
 			@Override
 			public ComplexType getInputDefinition() {
@@ -188,10 +189,10 @@ public class CRUDService implements DefinedService {
 						serviceInput.set("typeId", artifact.getConfig().getCoreType().getId());
 						serviceInput.set("connectionId", connectionId);
 						serviceInput.set("transactionId", transactionId);
-						serviceInput.set("language", language);
+//						serviceInput.set("language", language);
 						serviceInput.set("changeTracker", artifact.getConfig().getChangeTracker() == null ? null : artifact.getConfig().getChangeTracker().getId());
 					break;
-					case READ:
+					case LIST:
 						serviceInput = artifact.getConfig().getProvider().getConfig().getListService().getServiceInterface().getInputDefinition().newInstance();
 						serviceInput.set("typeId", artifact.getConfig().getCoreType().getId());
 						serviceInput.set("connectionId", connectionId);
@@ -233,7 +234,7 @@ public class CRUDService implements DefinedService {
 				ComplexContent output = getServiceInterface().getOutputDefinition().newInstance();
 				// in case of the read, we have some stuff to do still
 				switch(type) {
-					case READ: 
+					case LIST: 
 						if (serviceOutput.get("results") != null) {
 							ListResult result = TypeUtils.getAsBean((ComplexContent) serviceOutput.get("results"), ListResult.class);
 							if (result.getResults() != null && !result.getResults().isEmpty()) {
@@ -268,20 +269,21 @@ public class CRUDService implements DefinedService {
 			input.setName("input");
 			input.add(new SimpleElementImpl<String>("connectionId", SimpleTypeWrapperFactory.getInstance().getWrapper().wrap(String.class), input, new ValueImpl<Integer>(MinOccursProperty.getInstance(), 0)));
 			input.add(new SimpleElementImpl<String>("transactionId", SimpleTypeWrapperFactory.getInstance().getWrapper().wrap(String.class), input, new ValueImpl<Integer>(MinOccursProperty.getInstance(), 0)));
-			input.add(new SimpleElementImpl<String>("language", SimpleTypeWrapperFactory.getInstance().getWrapper().wrap(String.class), input, new ValueImpl<Integer>(MinOccursProperty.getInstance(), 0)));
 			Element<?> primary = getPrimary((ComplexType) artifact.getConfig().getCoreType());
 			switch(type) {
 				case CREATE:
 					input.add(new ComplexElementImpl("instance", createInput, input));
 				break;
 				case UPDATE:
+					input.add(new SimpleElementImpl<String>("language", SimpleTypeWrapperFactory.getInstance().getWrapper().wrap(String.class), input, new ValueImpl<Integer>(MinOccursProperty.getInstance(), 0)));
 					input.add(new SimpleElementImpl("id", (SimpleType<?>) primary.getType(), input));
 					input.add(new ComplexElementImpl("instance", updateInput, input));
 				break;
 				case DELETE:
 					input.add(new SimpleElementImpl("id", (SimpleType<?>) primary.getType(), input));
 				break;
-				case READ:
+				case LIST:
+					input.add(new SimpleElementImpl<String>("language", SimpleTypeWrapperFactory.getInstance().getWrapper().wrap(String.class), input, new ValueImpl<Integer>(MinOccursProperty.getInstance(), 0)));
 					input.add(new SimpleElementImpl<Integer>("limit", SimpleTypeWrapperFactory.getInstance().getWrapper().wrap(Integer.class), input, new ValueImpl<Integer>(MinOccursProperty.getInstance(), 0)));
 					input.add(new SimpleElementImpl<Long>("offset", SimpleTypeWrapperFactory.getInstance().getWrapper().wrap(Long.class), input, new ValueImpl<Integer>(MinOccursProperty.getInstance(), 0)));
 					input.add(new SimpleElementImpl<String>("orderBy", SimpleTypeWrapperFactory.getInstance().getWrapper().wrap(String.class), input, new ValueImpl<Integer>(MinOccursProperty.getInstance(), 0), new ValueImpl<Integer>(MaxOccursProperty.getInstance(), 0)));
@@ -325,7 +327,7 @@ public class CRUDService implements DefinedService {
 			output.setName("output");
 			
 			switch(type) {
-				case READ:
+				case LIST:
 					output.setSuperType(outputList);
 				break;
 			}

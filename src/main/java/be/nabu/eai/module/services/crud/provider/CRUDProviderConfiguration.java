@@ -1,11 +1,13 @@
 package be.nabu.eai.module.services.crud.provider;
 
+import javax.xml.bind.annotation.XmlRootElement;
 import javax.xml.bind.annotation.adapters.XmlJavaTypeAdapter;
 
 import be.nabu.eai.api.InterfaceFilter;
 import be.nabu.eai.repository.jaxb.ArtifactXMLAdapter;
 import be.nabu.libs.services.api.DefinedService;
 
+@XmlRootElement(name = "crudProvider")
 public class CRUDProviderConfiguration {
 	private DefinedService listService, createService, updateService, deleteService;
 
