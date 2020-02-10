@@ -11,14 +11,10 @@ import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 
-import be.nabu.eai.module.rest.provider.RESTFragmentListener;
-import be.nabu.eai.module.rest.provider.RESTService.PermissionImplementation;
-import be.nabu.eai.module.rest.provider.iface.RESTInterfaceArtifact;
 import be.nabu.eai.module.web.application.WebApplication;
 import be.nabu.eai.module.web.application.WebFragment;
 import be.nabu.eai.module.web.application.api.PermissionWithRole;
 import be.nabu.eai.module.web.application.api.RESTFragment;
-import be.nabu.eai.repository.EAIResourceRepository;
 import be.nabu.libs.authentication.api.Permission;
 import be.nabu.libs.events.api.EventSubscription;
 import be.nabu.libs.http.api.HTTPRequest;
@@ -159,6 +155,11 @@ public class CRUDService implements DefinedService, WebFragment, RESTFragment {
 									createInstance.set(element.getName(), new Date());
 								}
 							}
+						}
+						// if we have a parent id, set it
+						Element<?> parent = getParent();
+						if (parent != null) {
+							createInstance.set(parent.getName(), input.get("parentId"));
 						}
 						serviceInput.set("instance", createInstance);
 						serviceInput.set("connectionId", connectionId);
@@ -307,8 +308,14 @@ public class CRUDService implements DefinedService, WebFragment, RESTFragment {
 			input.add(new SimpleElementImpl<String>("connectionId", SimpleTypeWrapperFactory.getInstance().getWrapper().wrap(String.class), input, new ValueImpl<Integer>(MinOccursProperty.getInstance(), 0)));
 			input.add(new SimpleElementImpl<String>("transactionId", SimpleTypeWrapperFactory.getInstance().getWrapper().wrap(String.class), input, new ValueImpl<Integer>(MinOccursProperty.getInstance(), 0)));
 			Element<?> primary = getPrimary((ComplexType) artifact.getConfig().getCoreType());
+			Element<?> parent = getParent();
 			switch(type) {
 				case CREATE:
+					// we want to capture the parent id separately because this might have security implications in our REST model
+					// we "could" keep them together for non-rest calls but that is making it harder than it has to be...
+					if (parent != null) {
+						input.add(new SimpleElementImpl("parentId", (SimpleType<?>) parent.getType(), input));
+					}
 					input.add(new ComplexElementImpl("instance", createInput, input));
 				break;
 				case UPDATE:
@@ -354,6 +361,13 @@ public class CRUDService implements DefinedService, WebFragment, RESTFragment {
 			if (property != null && property.getValue() != null && property.getValue()) {
 				return element;
 			}
+		}
+		return null;
+	}
+	
+	private Element<?> getParent() {
+		if (artifact.getConfig().getParentField() != null) {
+			return ((ComplexType) artifact.getConfig().getCoreType()).get(artifact.getConfig().getParentField());
 		}
 		return null;
 	}
@@ -405,7 +419,7 @@ public class CRUDService implements DefinedService, WebFragment, RESTFragment {
 			restPath += this.artifact.getConfig().getBasePath().replaceFirst("^[/]+", "");
 		}
 		synchronized(subscriptions) {
-			CRUDListener listener = new CRUDListener(artifact, this.artifact, this, parentPath, getPath());
+			CRUDListener listener = new CRUDListener(artifact, this.artifact, this, parentPath, getPath(), Charset.forName("UTF-8"));
 			EventSubscription<HTTPRequest, HTTPResponse> subscription = artifact.getDispatcher().subscribe(HTTPRequest.class, listener);
 			subscription.filter(HTTPServerUtils.limitToPath(restPath));
 			subscriptions.put(key, subscription);
@@ -527,7 +541,7 @@ public class CRUDService implements DefinedService, WebFragment, RESTFragment {
 			case UPDATE:
 			case DELETE:
 				return path + getName() + "/{id}";
-			default:
+			case CREATE:
 				if (artifact.getConfig().getParentName() != null) {
 					path += artifact.getConfig().getParentName() + "/";
 				}
@@ -536,7 +550,31 @@ public class CRUDService implements DefinedService, WebFragment, RESTFragment {
 				}
 				path += getName();
 				return path;
+			// if we have a filter that does an "=" on the parent field, we want it in the path for proper REST design
+			default:
+				boolean hasParent = hasParentFilter();
+				if (hasParent) {
+					if (artifact.getConfig().getParentName() != null) {
+						path += artifact.getConfig().getParentName() + "/";
+					}
+					path += "{parentId}/";
+				}
+				path += getName();
+				return path;
 		}
+	}
+
+	public boolean hasParentFilter() {
+		boolean hasParent = false;
+		if (artifact.getConfig().getFilters() != null && artifact.getConfig().getParentField() != null) {
+			for (CRUDFilter filter : artifact.getConfig().getFilters()) {
+				if (artifact.getConfig().getParentField().equals(filter.getKey()) && "=".equals(filter.getOperator())) {
+					hasParent = true;
+					break;
+				}
+			}
+		}
+		return hasParent;
 	}
 
 	@Override
@@ -605,7 +643,7 @@ public class CRUDService implements DefinedService, WebFragment, RESTFragment {
 
 	@Override
 	public List<Element<?>> getHeaderParameters() {
-		return null;
+		return new ArrayList<Element<?>>();
 	}
 
 	@SuppressWarnings({ "unchecked", "rawtypes" })
@@ -618,8 +656,13 @@ public class CRUDService implements DefinedService, WebFragment, RESTFragment {
 		switch(type) {
 			case DELETE: 
 			case UPDATE: parameters.add(new SimpleElementImpl("id", (SimpleType) primary.getType(), input)); break;
-			default: 
+			case CREATE:
 				if (parent != null) {
+					parameters.add(new SimpleElementImpl("parentId", (SimpleType) parent.getType(), input));
+				}
+			break;
+			default: 
+				if (hasParentFilter()) {
 					parameters.add(new SimpleElementImpl("parentId", (SimpleType) parent.getType(), input));
 				}
 		}

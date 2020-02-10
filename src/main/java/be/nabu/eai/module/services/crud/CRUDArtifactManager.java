@@ -57,6 +57,9 @@ public class CRUDArtifactManager extends JAXBArtifactManager<CRUDConfiguration, 
 				blacklist = blacklist == null ? new ArrayList<String>() : new ArrayList<String>(blacklist);
 				blacklist.addAll(getPrimary((ComplexType) artifact.getConfig().getCoreType()));
 				blacklist.addAll(getGenerated((ComplexType) artifact.getConfig().getCoreType()));
+				if (artifact.getConfig().getParentField() != null) {
+					blacklist.add(artifact.getConfig().getParentField());
+				}
 				// generate the input
 				createInput = addChild(entries, types, "createInput", artifact.getConfig().getCoreType(), blacklist);
 				synchronize(createInput, (ComplexType) artifact.getConfig().getCoreType());
