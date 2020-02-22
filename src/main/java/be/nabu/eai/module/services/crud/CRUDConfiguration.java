@@ -5,6 +5,7 @@ import java.util.List;
 import javax.xml.bind.annotation.XmlRootElement;
 import javax.xml.bind.annotation.adapters.XmlJavaTypeAdapter;
 
+import be.nabu.eai.api.Comment;
 import be.nabu.eai.api.InterfaceFilter;
 import be.nabu.eai.module.services.crud.provider.CRUDProviderArtifact;
 import be.nabu.eai.repository.jaxb.ArtifactXMLAdapter;
@@ -30,6 +31,10 @@ public class CRUDConfiguration {
 	private List<String> createRole, updateRole, listRole, deleteRole;
 	
 	private List<CRUDFilter> filters;
+	
+	private boolean useLanguage;
+	
+	private boolean useExplicitLanguage;
 	
 	// the name is necessary for some things like permissions, components...
 	// if none is set, we assume the root name of the document
@@ -146,4 +151,20 @@ public class CRUDConfiguration {
 	public void setParentName(String parentName) {
 		this.parentName = parentName;
 	}
+	@Comment(title = "Whether or not we want to use language features at all, if you turn this on, we expose language input parameters for the services and at the REST level, we use the implicit user language for listing")
+	public boolean isUseLanguage() {
+		return useLanguage;
+	}
+	public void setUseLanguage(boolean useLanguage) {
+		this.useLanguage = useLanguage;
+	}
+	
+	@Comment(title = "If you enabled language features but want to use explicit language selection at the REST level. We no longer use the implicit language selection for the user.")
+	public boolean isUseExplicitLanguage() {
+		return useExplicitLanguage;
+	}
+	public void setUseExplicitLanguage(boolean useExplicitLanguage) {
+		this.useExplicitLanguage = useExplicitLanguage;
+	}
+	
 }

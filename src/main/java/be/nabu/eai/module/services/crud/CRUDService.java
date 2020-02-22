@@ -201,7 +201,9 @@ public class CRUDService implements DefinedService, WebFragment, RESTFragment {
 						serviceInput.set("instance", updateInstance);
 						serviceInput.set("connectionId", connectionId);
 						serviceInput.set("transactionId", transactionId);
-						serviceInput.set("language", language);
+						if (artifact.getConfig().isUseLanguage()) {
+							serviceInput.set("language", language);
+						}
 						serviceInput.set("changeTracker", artifact.getConfig().getChangeTracker() == null ? null : artifact.getConfig().getChangeTracker().getId());
 					break;
 					case DELETE:
@@ -222,7 +224,9 @@ public class CRUDService implements DefinedService, WebFragment, RESTFragment {
 						serviceInput.set("typeId", artifact.getConfig().getCoreType().getId());
 						serviceInput.set("connectionId", connectionId);
 						serviceInput.set("transactionId", transactionId);
-						serviceInput.set("language", language);
+						if (artifact.getConfig().isUseLanguage()) {
+							serviceInput.set("language", language);
+						}
 						serviceInput.set("limit", input == null ? null : input.get("limit"));
 						serviceInput.set("offset", input == null ? null : input.get("offset"));
 						serviceInput.set("orderBy", input == null ? null : input.get("orderBy"));
@@ -231,10 +235,11 @@ public class CRUDService implements DefinedService, WebFragment, RESTFragment {
 						CRUDFilter removed = null;
 						if (artifact.getConfig().getFilters() != null) {
 							for (CRUDFilter filter : artifact.getConfig().getFilters()) {
+								// we don't want the ilike statements to make it to the end
 								CRUDFilter newFilter = new CRUDFilter();
-								newFilter.setCaseInsensitive(filter.isCaseInsensitive());
 								newFilter.setKey(filter.getKey());
-								newFilter.setOperator(filter.getOperator());
+								newFilter.setOperator("ilike".equals(filter.getOperator()) ? "like" : filter.getOperator());
+								newFilter.setCaseInsensitive(filter.isCaseInsensitive() || "ilike".equals(filter.getOperator()));
 								// if we removed the previous filter and it was an "and", we can't make this an or, cause the end result would not match
 								// if the previous one was also an or (removed or not), it doesn't matter
 								newFilter.setOr(filter.isOr() && (removed == null || removed.isOr()));
@@ -250,6 +255,14 @@ public class CRUDService implements DefinedService, WebFragment, RESTFragment {
 									}
 									else if (inputtedValues != null) {
 										values.add(inputtedValues);
+									}
+									// if we have a like, add "%"
+									if ("like".equals(newFilter.getOperator())) {
+										for (Object value : values) {
+											if (value instanceof String) {
+												value = "%" + value.toString() + "%";
+											}
+										}
 									}
 								}
 								// if it is not an input, or actual input was provided, do it
@@ -319,7 +332,9 @@ public class CRUDService implements DefinedService, WebFragment, RESTFragment {
 					input.add(new ComplexElementImpl("instance", createInput, input));
 				break;
 				case UPDATE:
-					input.add(new SimpleElementImpl<String>("language", SimpleTypeWrapperFactory.getInstance().getWrapper().wrap(String.class), input, new ValueImpl<Integer>(MinOccursProperty.getInstance(), 0)));
+					if (artifact.getConfig().isUseLanguage()) {
+						input.add(new SimpleElementImpl<String>("language", SimpleTypeWrapperFactory.getInstance().getWrapper().wrap(String.class), input, new ValueImpl<Integer>(MinOccursProperty.getInstance(), 0)));
+					}
 					input.add(new SimpleElementImpl("id", (SimpleType<?>) primary.getType(), input));
 					input.add(new ComplexElementImpl("instance", updateInput, input));
 				break;
@@ -327,7 +342,9 @@ public class CRUDService implements DefinedService, WebFragment, RESTFragment {
 					input.add(new SimpleElementImpl("id", (SimpleType<?>) primary.getType(), input));
 				break;
 				case LIST:
-					input.add(new SimpleElementImpl<String>("language", SimpleTypeWrapperFactory.getInstance().getWrapper().wrap(String.class), input, new ValueImpl<Integer>(MinOccursProperty.getInstance(), 0)));
+					if (artifact.getConfig().isUseLanguage()) {
+						input.add(new SimpleElementImpl<String>("language", SimpleTypeWrapperFactory.getInstance().getWrapper().wrap(String.class), input, new ValueImpl<Integer>(MinOccursProperty.getInstance(), 0)));
+					}
 					input.add(new SimpleElementImpl<Integer>("limit", SimpleTypeWrapperFactory.getInstance().getWrapper().wrap(Integer.class), input, new ValueImpl<Integer>(MinOccursProperty.getInstance(), 0)));
 					input.add(new SimpleElementImpl<Long>("offset", SimpleTypeWrapperFactory.getInstance().getWrapper().wrap(Long.class), input, new ValueImpl<Integer>(MinOccursProperty.getInstance(), 0)));
 					input.add(new SimpleElementImpl<String>("orderBy", SimpleTypeWrapperFactory.getInstance().getWrapper().wrap(String.class), input, new ValueImpl<Integer>(MinOccursProperty.getInstance(), 0), new ValueImpl<Integer>(MaxOccursProperty.getInstance(), 0)));
@@ -624,6 +641,9 @@ public class CRUDService implements DefinedService, WebFragment, RESTFragment {
 			parameters.add(new SimpleElementImpl<Integer>("limit", SimpleTypeWrapperFactory.getInstance().getWrapper().wrap(Integer.class), input, new ValueImpl<Integer>(MinOccursProperty.getInstance(), 0)));
 			parameters.add(new SimpleElementImpl<Long>("offset", SimpleTypeWrapperFactory.getInstance().getWrapper().wrap(Long.class), input, new ValueImpl<Integer>(MinOccursProperty.getInstance(), 0)));
 			parameters.add(new SimpleElementImpl<String>("orderBy", SimpleTypeWrapperFactory.getInstance().getWrapper().wrap(String.class), input, new ValueImpl<Integer>(MinOccursProperty.getInstance(), 0), new ValueImpl<Integer>(MaxOccursProperty.getInstance(), 0)));
+			if (artifact.getConfig().isUseLanguage() && artifact.getConfig().isUseExplicitLanguage()) {
+				parameters.add(new SimpleElementImpl<String>("language", SimpleTypeWrapperFactory.getInstance().getWrapper().wrap(String.class), input, new ValueImpl<Integer>(MinOccursProperty.getInstance(), 0)));
+			}
 			if (artifact.getConfig().getFilters() != null) {
 				for (CRUDFilter filter : artifact.getConfig().getFilters()) {
 					if (filter.isInput()) {
@@ -637,6 +657,10 @@ public class CRUDService implements DefinedService, WebFragment, RESTFragment {
 					}
 				}
 			}
+		}
+		else if (type == CRUDType.UPDATE && artifact.getConfig().isUseLanguage() && artifact.getConfig().isUseExplicitLanguage()) {
+			Structure input = new Structure();
+			parameters.add(new SimpleElementImpl<String>("language", SimpleTypeWrapperFactory.getInstance().getWrapper().wrap(String.class), input, new ValueImpl<Integer>(MinOccursProperty.getInstance(), 0)));
 		}
 		return parameters;
 	}

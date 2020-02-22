@@ -14,8 +14,10 @@ import java.util.Map;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import be.nabu.eai.module.services.crud.CRUDService.CRUDType;
 import be.nabu.eai.module.web.application.WebApplication;
 import be.nabu.eai.module.web.application.WebApplicationUtils;
+import be.nabu.eai.repository.api.LanguageProvider;
 import be.nabu.libs.authentication.api.Device;
 import be.nabu.libs.authentication.api.Token;
 import be.nabu.libs.events.api.EventHandler;
@@ -254,6 +256,29 @@ public class CRUDListener implements EventHandler<HTTPRequest, HTTPResponse> {
 	private ComplexContent call(ExecutionContext context, Token token, Map<String, List<String>> queryProperties, Map<String, String> pathParameters, ComplexContent body, String language) throws ServiceException {
 		ComplexContent input = service.getServiceInterface().getInputDefinition().newInstance();
 		
+		String chosenLanguage = null;
+		// if we indicated that we want to use the language, we injected a query parameter to do so
+		if (artifact.getConfig().isUseLanguage()) {
+			if (artifact.getConfig().isUseExplicitLanguage() ) {
+				List<String> list = queryProperties.get("language");
+				if (list != null && !list.isEmpty()) {
+					chosenLanguage = list.get(0);
+				}
+			}
+			// if we are doing a select and we did not specify an explicit language, we want to use the language of the user?
+			else if (service.getType() == CRUDType.LIST) {
+				chosenLanguage = language;
+			}
+			// check that we choose a valid language
+			LanguageProvider languageProvider = application.getLanguageProvider();
+			if (languageProvider != null) {
+				List<String> supportedLanguages = languageProvider.getSupportedLanguages();
+				if (supportedLanguages != null && !supportedLanguages.contains(chosenLanguage)) {
+					chosenLanguage = null;
+				}
+			}
+		}
+		
 		switch (service.getType()) {
 			case CREATE:
 				input.set("instance", body);
@@ -264,7 +289,9 @@ public class CRUDListener implements EventHandler<HTTPRequest, HTTPResponse> {
 			case UPDATE:
 				input.set("id", pathParameters.get("id"));
 				input.set("instance", body);
-				input.set("language", language);
+				if (artifact.getConfig().isUseLanguage() && chosenLanguage != null) {
+					input.set("language", chosenLanguage);
+				}
 			break;
 			case DELETE:
 				input.set("id", pathParameters.get("id"));
@@ -273,7 +300,9 @@ public class CRUDListener implements EventHandler<HTTPRequest, HTTPResponse> {
 				input.set("limit", input.get("limit"));
 				input.set("offset", input.get("offset"));
 				input.set("orderBy", input.get("orderBy"));
-				input.set("language", language);
+				if (artifact.getConfig().isUseLanguage() && chosenLanguage != null) {
+					input.set("language", chosenLanguage);
+				}
 				if (artifact.getConfig().getFilters() != null) {
 					for (CRUDFilter filter : artifact.getConfig().getFilters()) {
 						if (filter.isInput()) {

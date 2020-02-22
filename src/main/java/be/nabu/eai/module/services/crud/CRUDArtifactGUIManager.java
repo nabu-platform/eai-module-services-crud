@@ -10,7 +10,6 @@ import java.util.List;
 import be.nabu.eai.developer.MainController;
 import be.nabu.eai.developer.managers.base.BaseJAXBGUIManager;
 import be.nabu.eai.developer.managers.util.SimpleProperty;
-import be.nabu.eai.developer.util.EAIDeveloperUtils;
 import be.nabu.eai.repository.resources.RepositoryEntry;
 import be.nabu.libs.property.api.Property;
 import be.nabu.libs.property.api.Value;
@@ -289,7 +288,7 @@ public class CRUDArtifactGUIManager extends BaseJAXBGUIManager<CRUDConfiguration
 			HBox.setHgrow(operator, Priority.ALWAYS);
 			operator.setEditable(true);
 			operator.setValue(filter.getOperator());
-			operator.getItems().addAll("=", "<>", ">", "<", ">=", "<=", "is null", "is not null", "like");
+			operator.getItems().addAll("=", "<>", ">", "<", ">=", "<=", "is null", "is not null", "like", "ilike");
 			operator.valueProperty().addListener(new ChangeListener<String>() {
 				@Override
 				public void changed(ObservableValue<? extends String> arg0, String arg1, String arg2) {

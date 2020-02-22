@@ -51,11 +51,12 @@ public class CRUDArtifactManager extends JAXBArtifactManager<CRUDConfiguration, 
 			ModifiableEntry types = EAIRepositoryUtils.getParent(parent, "types", true);
 			DefinedStructure createInput = null, updateInput = null, outputList = null, updateIntermediaryInput = null;
 			// if we have a provider with a create, add it
+			List<String> primary = getPrimary((ComplexType) artifact.getConfig().getCoreType());
 			if (artifact.getConfig().getProvider() != null && artifact.getConfig().getProvider().getConfig().getCreateService() != null) {
 				List<String> blacklist = artifact.getConfig().getCreateBlacklistFields();
 				// let's add to that
 				blacklist = blacklist == null ? new ArrayList<String>() : new ArrayList<String>(blacklist);
-				blacklist.addAll(getPrimary((ComplexType) artifact.getConfig().getCoreType()));
+				blacklist.addAll(primary);
 				blacklist.addAll(getGenerated((ComplexType) artifact.getConfig().getCoreType()));
 				if (artifact.getConfig().getParentField() != null) {
 					blacklist.add(artifact.getConfig().getParentField());
@@ -75,12 +76,14 @@ public class CRUDArtifactManager extends JAXBArtifactManager<CRUDConfiguration, 
 				}
 				// we create an intermediary update structure that contains all the fields you input as well as the fields we need to add to make it work (the primary key & any refreshable fields)
 				blacklist.addAll(getGenerated((ComplexType) artifact.getConfig().getCoreType()));
-				updateIntermediaryInput = addChild(entries, types, "updateIntermediaryInput", artifact.getConfig().getCoreType(), blacklist);
+				// remove any generated that are also the primary, we need to keep the primary for update reference
+				blacklist.removeAll(primary);
+				updateIntermediaryInput = addChild(entries, types, "updateIntermediaryInput", artifact.getConfig().getCoreType(), new ArrayList<String>(blacklist));
 				synchronize(updateIntermediaryInput, (ComplexType) artifact.getConfig().getCoreType());
 				
 				// we don't need to blacklist again as we will build upon the intermediary
 				blacklist.clear();
-				blacklist.addAll(getPrimary((ComplexType) artifact.getConfig().getCoreType()));
+				blacklist.addAll(primary);
 				if (artifact.getConfig().getUpdateRegenerateFields() != null) {
 					blacklist.addAll(artifact.getConfig().getUpdateRegenerateFields());
 				}
@@ -116,17 +119,18 @@ public class CRUDArtifactManager extends JAXBArtifactManager<CRUDConfiguration, 
 				entries.add(childEntry);
 			}
 			
+			// note that we can only add update services & list services if we have a primary key
 			ModifiableEntry services = EAIRepositoryUtils.getParent(parent, "services", true);
 			if (artifact.getConfig().getProvider() != null && artifact.getConfig().getProvider().getConfig().getCreateService() != null) {
 				addChild(entries, services, "create", new CRUDService(artifact, services.getId() + ".create", CRUDType.CREATE, createInput, updateInput, outputList, updateIntermediaryInput));
 			}
-			if (artifact.getConfig().getProvider() != null && artifact.getConfig().getProvider().getConfig().getUpdateService() != null) {
+			if (!primary.isEmpty() && artifact.getConfig().getProvider() != null && artifact.getConfig().getProvider().getConfig().getUpdateService() != null) {
 				addChild(entries, services, "update", new CRUDService(artifact, services.getId() + ".update", CRUDType.UPDATE, createInput, updateInput, outputList, updateIntermediaryInput));
 			}
 			if (artifact.getConfig().getProvider() != null && artifact.getConfig().getProvider().getConfig().getListService() != null) {
 				addChild(entries, services, "list", new CRUDService(artifact, services.getId() + ".list", CRUDType.LIST, createInput, updateInput, outputList, updateIntermediaryInput));
 			}
-			if (artifact.getConfig().getProvider() != null && artifact.getConfig().getProvider().getConfig().getDeleteService() != null) {
+			if (!primary.isEmpty() && artifact.getConfig().getProvider() != null && artifact.getConfig().getProvider().getConfig().getDeleteService() != null) {
 				addChild(entries, services, "delete", new CRUDService(artifact, services.getId() + ".delete", CRUDType.DELETE, createInput, updateInput, outputList, updateIntermediaryInput));
 			}
 		}
