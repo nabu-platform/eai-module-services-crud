@@ -354,12 +354,15 @@ public class CRUDService implements DefinedService, WebFragment, RESTFragment {
 						for (CRUDFilter filter : artifact.getConfig().getFilters()) {
 							if (filter.isInput()) {
 								Element<?> element = ((ComplexType) artifact.getConfig().getCoreType()).get(filter.getKey());
-								SimpleElementImpl childElement = new SimpleElementImpl(filter.getAlias() == null ? filter.getKey() : filter.getAlias(), (SimpleType<?>) element.getType(), filters, new ValueImpl<Integer>(MinOccursProperty.getInstance(), 0));
-								// only for some filters do we support the list entries
-								if ("=".equals(filter.getOperator()) || "<>".equals(filter.getOperator())) {
-									childElement.setProperty(new ValueImpl<Integer>(MaxOccursProperty.getInstance(), 0));
+								// old filters might still have outdated values
+								if (element != null) {
+									SimpleElementImpl childElement = new SimpleElementImpl(filter.getAlias() == null ? filter.getKey() : filter.getAlias(), (SimpleType<?>) element.getType(), filters, new ValueImpl<Integer>(MinOccursProperty.getInstance(), 0));
+									// only for some filters do we support the list entries
+									if ("=".equals(filter.getOperator()) || "<>".equals(filter.getOperator())) {
+										childElement.setProperty(new ValueImpl<Integer>(MaxOccursProperty.getInstance(), 0));
+									}
+									filters.add(childElement);
 								}
-								filters.add(childElement);
 							}
 						}
 						input.add(new ComplexElementImpl("filter", filters, input, new ValueImpl<Integer>(MinOccursProperty.getInstance(), 0)));
