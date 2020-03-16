@@ -393,6 +393,9 @@ public class CRUDArtifactGUIManager extends BaseJAXBGUIManager<CRUDConfiguration
 			if (toIgnore.indexOf(field) >= 0) {
 				continue;
 			}
+			if (instance.getConfig().getProvider() != null && instance.getConfig().getProvider().getConfig().getBlacklistedFields() != null && instance.getConfig().getProvider().getConfig().getBlacklistedFields().contains(field)) {
+				continue;
+			}
 			CheckBox box = new CheckBox(field);
 			box.setSelected(list.indexOf(field) >= 0);
 			box.selectedProperty().addListener(new ChangeListener<Boolean>() {

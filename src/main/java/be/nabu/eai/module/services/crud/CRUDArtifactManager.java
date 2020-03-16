@@ -5,6 +5,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 import be.nabu.eai.module.services.crud.CRUDService.CRUDType;
+import be.nabu.eai.module.services.crud.provider.CRUDProviderArtifact;
 import be.nabu.eai.repository.EAINode;
 import be.nabu.eai.repository.EAIRepositoryUtils;
 import be.nabu.eai.repository.api.ArtifactRepositoryManager;
@@ -46,6 +47,8 @@ public class CRUDArtifactManager extends JAXBArtifactManager<CRUDConfiguration, 
 	@Override
 	public List<Entry> addChildren(ModifiableEntry parent, CRUDArtifact artifact) throws IOException {
 		List<Entry> entries = new ArrayList<Entry>();
+		((EAINode) parent.getNode()).setLeaf(false);
+		CRUDProviderArtifact provider = artifact.getConfig().getProvider();
 		// create the types
 		if (artifact.getConfig().getCoreType() != null) {
 			ModifiableEntry types = EAIRepositoryUtils.getParent(parent, "types", true);
@@ -56,6 +59,9 @@ public class CRUDArtifactManager extends JAXBArtifactManager<CRUDConfiguration, 
 				List<String> blacklist = artifact.getConfig().getCreateBlacklistFields();
 				// let's add to that
 				blacklist = blacklist == null ? new ArrayList<String>() : new ArrayList<String>(blacklist);
+				if (provider != null && provider.getConfig().getBlacklistedFields() != null) {
+					blacklist.addAll(provider.getConfig().getBlacklistedFields());
+				}
 				blacklist.addAll(primary);
 				blacklist.addAll(getGenerated((ComplexType) artifact.getConfig().getCoreType()));
 				if (artifact.getConfig().getParentField() != null) {
@@ -71,6 +77,9 @@ public class CRUDArtifactManager extends JAXBArtifactManager<CRUDConfiguration, 
 				// let's add to that
 				blacklist = blacklist == null ? new ArrayList<String>() : new ArrayList<String>(blacklist);
 				
+				if (provider != null && provider.getConfig().getBlacklistedFields() != null) {
+					blacklist.addAll(provider.getConfig().getBlacklistedFields());
+				}
 				if (artifact.getConfig().getUpdateRegenerateFields() != null) {
 					blacklist.removeAll(artifact.getConfig().getUpdateRegenerateFields());
 				}
