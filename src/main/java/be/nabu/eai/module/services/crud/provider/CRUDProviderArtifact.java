@@ -10,4 +10,7 @@ public class CRUDProviderArtifact extends JAXBArtifact<CRUDProviderConfiguration
 		super(id, directory, repository, "crud-provider.xml", CRUDProviderConfiguration.class);
 	}
 
+	public boolean isPrimaryKeySecurityContext() {
+		return getConfig().getPrimaryKeySecurityContext() != null && getConfig().getPrimaryKeySecurityContext();
+	}
 }

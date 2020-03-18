@@ -135,18 +135,18 @@ public class CRUDArtifactGUIManager extends BaseJAXBGUIManager<CRUDConfiguration
 	private void populateGeneral(CRUDArtifact instance, Pane general) {
 		VBox main = new VBox();
 		
-		// select the parent field
-		ComboBox<String> parentField = newFieldCombo(instance);
-		parentField.getSelectionModel().select(instance.getConfig().getParentField());
-		parentField.getSelectionModel().selectedItemProperty().addListener(new ChangeListener<String>() {
+		// select the security context field
+		ComboBox<String> securityContextField = newFieldCombo(instance);
+		securityContextField.getSelectionModel().select(instance.getConfig().getSecurityContextField());
+		securityContextField.getSelectionModel().selectedItemProperty().addListener(new ChangeListener<String>() {
 			@Override
 			public void changed(ObservableValue<? extends String> arg0, String arg1, String arg2) {
-				instance.getConfig().setParentField(arg2 == null || arg2.trim().isEmpty() ? null : arg2);
+				instance.getConfig().setSecurityContextField(arg2 == null || arg2.trim().isEmpty() ? null : arg2);
 				MainController.getInstance().setChanged();
 			}
 		});
-		HBox parentFieldBox = createField(parentField, "Parent Field", "Configure the parent field for this type, this is relevant for listing and creating");
-		main.getChildren().add(parentFieldBox);
+		HBox securityField = createField(securityContextField, "Security Context Field Field", "Configure the security context field for this type.");
+		main.getChildren().add(securityField);
 		
 		// list and create have security field of parent
 		// for the list, it has to be one of the filters, for create there has to be a field to store it in
@@ -190,7 +190,7 @@ public class CRUDArtifactGUIManager extends BaseJAXBGUIManager<CRUDConfiguration
 		if (instance.getConfig().getCreateBlacklistFields() == null) {
 			instance.getConfig().setCreateBlacklistFields(new ArrayList<String>());
 		}
-		populateChecklist(instance, main, instance.getConfig().getCreateBlacklistFields(), list);
+		populateChecklist(instance, main, instance.getConfig().getCreateBlacklistFields(), list, true);
 		
 		maximize(main);
 	}
@@ -210,7 +210,7 @@ public class CRUDArtifactGUIManager extends BaseJAXBGUIManager<CRUDConfiguration
 		if (instance.getConfig().getUpdateBlacklistFields() == null) {
 			instance.getConfig().setUpdateBlacklistFields(new ArrayList<String>());
 		}
-		populateChecklist(instance, main, instance.getConfig().getUpdateBlacklistFields(), list);
+		populateChecklist(instance, main, instance.getConfig().getUpdateBlacklistFields(), list, true);
 		
 		boolean foundAny = false;
 		label = new Label("Choose the fields you want to regenerate:");
@@ -229,7 +229,7 @@ public class CRUDArtifactGUIManager extends BaseJAXBGUIManager<CRUDConfiguration
 				instance.getConfig().setUpdateRegenerateFields(new ArrayList<String>());
 			}
 			main.getChildren().add(label);
-			populateChecklist(instance, main, instance.getConfig().getUpdateRegenerateFields(), ignore);
+			populateChecklist(instance, main, instance.getConfig().getUpdateRegenerateFields(), ignore, true);
 		}
 		maximize(main);
 	}
@@ -384,16 +384,16 @@ public class CRUDArtifactGUIManager extends BaseJAXBGUIManager<CRUDConfiguration
 		if (instance.getConfig().getListBlacklistFields() == null) {
 			instance.getConfig().setListBlacklistFields(new ArrayList<String>());
 		}
-		populateChecklist(instance, main, instance.getConfig().getListBlacklistFields(), new ArrayList<String>());
+		populateChecklist(instance, main, instance.getConfig().getListBlacklistFields(), new ArrayList<String>(), false);
 	}
 	
-	private void populateChecklist(CRUDArtifact instance, Pane pane, List<String> list, List<String> toIgnore) {
+	private void populateChecklist(CRUDArtifact instance, Pane pane, List<String> list, List<String> toIgnore, boolean respectProviderBlacklist) {
 		VBox checkboxes = new VBox();
 		for (String field : fields(instance)) {
 			if (toIgnore.indexOf(field) >= 0) {
 				continue;
 			}
-			if (instance.getConfig().getProvider() != null && instance.getConfig().getProvider().getConfig().getBlacklistedFields() != null && instance.getConfig().getProvider().getConfig().getBlacklistedFields().contains(field)) {
+			if (respectProviderBlacklist && instance.getConfig().getProvider() != null && instance.getConfig().getProvider().getConfig().getBlacklistedFields() != null && instance.getConfig().getProvider().getConfig().getBlacklistedFields().contains(field)) {
 				continue;
 			}
 			CheckBox box = new CheckBox(field);

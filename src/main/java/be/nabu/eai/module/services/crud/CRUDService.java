@@ -157,14 +157,15 @@ public class CRUDService implements DefinedService, WebFragment, RESTFragment {
 							}
 						}
 						// if we have a parent id, set it
-						Element<?> parent = getParent();
-						if (parent != null) {
-							createInstance.set(parent.getName(), input.get("parentId"));
+						Element<?> securityContext = getSecurityContext();
+						if (securityContext != null) {
+							createInstance.set(securityContext.getName(), input.get("contextId"));
 						}
 						serviceInput.set("instance", createInstance);
 						serviceInput.set("connectionId", connectionId);
 						serviceInput.set("transactionId", transactionId);
 						serviceInput.set("language", language);
+						serviceInput.set("typeId", artifact.getConfig().getCoreType().getId());
 						serviceInput.set("changeTracker", artifact.getConfig().getChangeTracker() == null ? null : artifact.getConfig().getChangeTracker().getId());
 					break;
 					case UPDATE:
@@ -201,6 +202,7 @@ public class CRUDService implements DefinedService, WebFragment, RESTFragment {
 						serviceInput.set("instance", updateInstance);
 						serviceInput.set("connectionId", connectionId);
 						serviceInput.set("transactionId", transactionId);
+						serviceInput.set("typeId", artifact.getConfig().getCoreType().getId());
 						if (artifact.getConfig().isUseLanguage()) {
 							serviceInput.set("language", language);
 						}
@@ -321,13 +323,19 @@ public class CRUDService implements DefinedService, WebFragment, RESTFragment {
 			input.add(new SimpleElementImpl<String>("connectionId", SimpleTypeWrapperFactory.getInstance().getWrapper().wrap(String.class), input, new ValueImpl<Integer>(MinOccursProperty.getInstance(), 0)));
 			input.add(new SimpleElementImpl<String>("transactionId", SimpleTypeWrapperFactory.getInstance().getWrapper().wrap(String.class), input, new ValueImpl<Integer>(MinOccursProperty.getInstance(), 0)));
 			Element<?> primary = getPrimary((ComplexType) artifact.getConfig().getCoreType());
-			Element<?> parent = getParent();
+			Element<?> securityContext = getSecurityContext();
 			switch(type) {
 				case CREATE:
 					// we want to capture the parent id separately because this might have security implications in our REST model
 					// we "could" keep them together for non-rest calls but that is making it harder than it has to be...
-					if (parent != null) {
-						input.add(new SimpleElementImpl("parentId", (SimpleType<?>) parent.getType(), input));
+					if (securityContext != null) {
+						SimpleElementImpl parentElement = new SimpleElementImpl("contextId", (SimpleType<?>) securityContext.getType(), input);
+						Value<Integer> property = securityContext.getProperty(MinOccursProperty.getInstance());
+						// we want it to be optional input if it is optional in the data type
+						if (property != null) {
+							parentElement.setProperty(property);
+						}
+						input.add(parentElement);
 					}
 					input.add(new ComplexElementImpl("instance", createInput, input));
 				break;
@@ -385,9 +393,9 @@ public class CRUDService implements DefinedService, WebFragment, RESTFragment {
 		return null;
 	}
 	
-	private Element<?> getParent() {
-		if (artifact.getConfig().getParentField() != null) {
-			return ((ComplexType) artifact.getConfig().getCoreType()).get(artifact.getConfig().getParentField());
+	protected Element<?> getSecurityContext() {
+		if (artifact.getConfig().getSecurityContextField() != null) {
+			return ((ComplexType) artifact.getConfig().getCoreType()).get(artifact.getConfig().getSecurityContextField());
 		}
 		return null;
 	}
@@ -560,35 +568,29 @@ public class CRUDService implements DefinedService, WebFragment, RESTFragment {
 		switch(type) {
 			case UPDATE:
 			case DELETE:
-				return path + getName() + "/{id}";
+				// if we have a security context and the id is not a valid one, add it
+				return path + (getSecurityContext() != null && !artifact.getConfig().getProvider().isPrimaryKeySecurityContext() ? "{contextId}/" : "") + getName() + "/{id}";
 			case CREATE:
-				if (artifact.getConfig().getParentName() != null) {
-					path += artifact.getConfig().getParentName() + "/";
-				}
-				if (artifact.getConfig().getParentField() != null) {
-					path += "{parentId}/";
+				if (getSecurityContext() != null) {
+					path += "{contextId}/";
 				}
 				path += getName();
 				return path;
 			// if we have a filter that does an "=" on the parent field, we want it in the path for proper REST design
 			default:
-				boolean hasParent = hasParentFilter();
-				if (hasParent) {
-					if (artifact.getConfig().getParentName() != null) {
-						path += artifact.getConfig().getParentName() + "/";
-					}
-					path += "{parentId}/";
+				if (hasSecurityContextFilter()) {
+					path += "{contextId}/";
 				}
 				path += getName();
 				return path;
 		}
 	}
 
-	public boolean hasParentFilter() {
+	public boolean hasSecurityContextFilter() {
 		boolean hasParent = false;
-		if (artifact.getConfig().getFilters() != null && artifact.getConfig().getParentField() != null) {
+		if (artifact.getConfig().getFilters() != null && artifact.getConfig().getSecurityContextField() != null) {
 			for (CRUDFilter filter : artifact.getConfig().getFilters()) {
-				if (artifact.getConfig().getParentField().equals(filter.getKey()) && "=".equals(filter.getOperator())) {
+				if (artifact.getConfig().getSecurityContextField().equals(filter.getKey()) && "=".equals(filter.getOperator())) {
 					hasParent = true;
 					break;
 				}
@@ -648,8 +650,13 @@ public class CRUDService implements DefinedService, WebFragment, RESTFragment {
 				parameters.add(new SimpleElementImpl<String>("language", SimpleTypeWrapperFactory.getInstance().getWrapper().wrap(String.class), input, new ValueImpl<Integer>(MinOccursProperty.getInstance(), 0)));
 			}
 			if (artifact.getConfig().getFilters() != null) {
+				Element<?> parent = getSecurityContext();
 				for (CRUDFilter filter : artifact.getConfig().getFilters()) {
 					if (filter.isInput()) {
+						// if we have a list service which has a parent id filter, we put it in the path, not in the query
+						if (parent != null && parent.getName().equals(filter.getKey())) {
+							continue;
+						}
 						Element<?> element = ((ComplexType) artifact.getConfig().getCoreType()).get(filter.getKey());
 						SimpleElementImpl childElement = new SimpleElementImpl(filter.getAlias() == null ? filter.getKey() : filter.getAlias(), (SimpleType<?>) element.getType(), input, new ValueImpl<Integer>(MinOccursProperty.getInstance(), 0));
 						// only for some filters do we support the list entries
@@ -679,18 +686,23 @@ public class CRUDService implements DefinedService, WebFragment, RESTFragment {
 		Structure input = new Structure();
 		List<Element<?>> parameters = new ArrayList<Element<?>>();
 		Element<?> primary = getPrimary((ComplexType) artifact.getConfig().getCoreType());
-		Element<?> parent = artifact.getConfig().getParentField() == null ? null : ((ComplexType) artifact.getConfig().getCoreType()).get(artifact.getConfig().getParentField());
+		Element<?> securityContext = getSecurityContext();
 		switch(type) {
 			case DELETE: 
-			case UPDATE: parameters.add(new SimpleElementImpl("id", (SimpleType) primary.getType(), input)); break;
+			case UPDATE: 
+				parameters.add(new SimpleElementImpl("id", (SimpleType) primary.getType(), input)); 
+				if (securityContext != null && !artifact.getConfig().getProvider().isPrimaryKeySecurityContext()) {
+					parameters.add(new SimpleElementImpl("contextId", (SimpleType) securityContext.getType(), input));
+				}
+			break;
 			case CREATE:
-				if (parent != null) {
-					parameters.add(new SimpleElementImpl("parentId", (SimpleType) parent.getType(), input));
+				if (securityContext != null) {
+					parameters.add(new SimpleElementImpl("contextId", (SimpleType) securityContext.getType(), input));
 				}
 			break;
 			default: 
-				if (hasParentFilter()) {
-					parameters.add(new SimpleElementImpl("parentId", (SimpleType) parent.getType(), input));
+				if (securityContext != null && hasSecurityContextFilter()) {
+					parameters.add(new SimpleElementImpl("contextId", (SimpleType) securityContext.getType(), input));
 				}
 		}
 		return parameters;

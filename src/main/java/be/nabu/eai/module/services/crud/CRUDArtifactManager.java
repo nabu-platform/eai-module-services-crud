@@ -26,6 +26,7 @@ import be.nabu.libs.types.base.ComplexElementImpl;
 import be.nabu.libs.types.base.ValueImpl;
 import be.nabu.libs.types.java.BeanResolver;
 import be.nabu.libs.types.properties.CollectionNameProperty;
+import be.nabu.libs.types.properties.DuplicateProperty;
 import be.nabu.libs.types.properties.GeneratedProperty;
 import be.nabu.libs.types.properties.MaxOccursProperty;
 import be.nabu.libs.types.properties.MinOccursProperty;
@@ -64,8 +65,8 @@ public class CRUDArtifactManager extends JAXBArtifactManager<CRUDConfiguration, 
 				}
 				blacklist.addAll(primary);
 				blacklist.addAll(getGenerated((ComplexType) artifact.getConfig().getCoreType()));
-				if (artifact.getConfig().getParentField() != null) {
-					blacklist.add(artifact.getConfig().getParentField());
+				if (artifact.getConfig().getSecurityContextField() != null) {
+					blacklist.add(artifact.getConfig().getSecurityContextField());
 				}
 				// generate the input
 				createInput = addChild(entries, types, "createInput", artifact.getConfig().getCoreType(), blacklist);
@@ -150,6 +151,9 @@ public class CRUDArtifactManager extends JAXBArtifactManager<CRUDConfiguration, 
 		to.setName(from.getName());
 		for (Value<?> property : from.getProperties()) {
 			if (CollectionNameProperty.getInstance().equals(property.getProperty())) {
+				to.setProperty(property);
+			}
+			else if (DuplicateProperty.getInstance().equals(property.getProperty())) {
 				to.setProperty(property);
 			}
 		}

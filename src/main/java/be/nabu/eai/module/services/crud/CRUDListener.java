@@ -18,7 +18,9 @@ import be.nabu.eai.module.services.crud.CRUDService.CRUDType;
 import be.nabu.eai.module.web.application.WebApplication;
 import be.nabu.eai.module.web.application.WebApplicationUtils;
 import be.nabu.eai.repository.api.LanguageProvider;
+import be.nabu.libs.authentication.api.Authenticator;
 import be.nabu.libs.authentication.api.Device;
+import be.nabu.libs.authentication.api.PermissionHandler;
 import be.nabu.libs.authentication.api.Token;
 import be.nabu.libs.events.api.EventHandler;
 import be.nabu.libs.http.HTTPCodes;
@@ -37,6 +39,7 @@ import be.nabu.libs.services.api.ExecutionContext;
 import be.nabu.libs.services.api.ServiceException;
 import be.nabu.libs.types.api.ComplexContent;
 import be.nabu.libs.types.api.ComplexType;
+import be.nabu.libs.types.api.Element;
 import be.nabu.libs.types.binding.api.MarshallableBinding;
 import be.nabu.libs.types.binding.api.UnmarshallableBinding;
 import be.nabu.libs.types.binding.api.Window;
@@ -236,7 +239,7 @@ public class CRUDListener implements EventHandler<HTTPRequest, HTTPResponse> {
 		}
 	}
 
-	public ComplexContent call(ExecutionContext context, Token token, URI uri, Map<String, List<String>> queryProperties, ComplexContent body, String language) throws ServiceException {
+	public ComplexContent call(ExecutionContext context, Token token, URI uri, Map<String, List<String>> queryProperties, ComplexContent body, String language) throws ServiceException, IOException {
 		String path = URIUtils.normalize(uri.getPath());
 		// not in this web artifact
 		if (!path.startsWith(parentPath)) {
@@ -253,8 +256,57 @@ public class CRUDListener implements EventHandler<HTTPRequest, HTTPResponse> {
 		return call(context, token, queryProperties, analyzed, body, language);
 	}
 	
-	private ComplexContent call(ExecutionContext context, Token token, Map<String, List<String>> queryProperties, Map<String, String> pathParameters, ComplexContent body, String language) throws ServiceException {
+	private ComplexContent call(ExecutionContext executionContext, Token token, Map<String, List<String>> queryProperties, Map<String, String> pathParameters, ComplexContent body, String language) throws ServiceException, IOException {
 		ComplexContent input = service.getServiceInterface().getInputDefinition().newInstance();
+		
+		// the problem is the context: the id might not be a node, the parent might not be a node, we might not be using nodes, we might not be using cms at all
+		// so how do we validate the context? for create & list, we presume the parent field is the context? for update & delete, it is likely the instance itself
+		// if there is no context, you _must_ have a global permission which is in a way stricter than a specific context permission, so we should be able to do that at least
+		// check permissions
+		PermissionHandler permissionHandler = application.getPermissionHandler();
+		if (permissionHandler != null) {
+			String action = service.getPermissionAction();
+			String context = null;
+			
+			switch(service.getType()) {
+				case CREATE:
+					if (pathParameters.get("contextId") != null) {
+						context = pathParameters.get("contextId");
+					}
+				break;
+				case UPDATE:
+				case DELETE:
+					if (artifact.getConfig().getProvider().isPrimaryKeySecurityContext()) {
+						context = pathParameters.get("id");
+					}
+					else if (pathParameters.get("contextId") != null) {
+						context = pathParameters.get("contextId");
+					}
+				break;
+				case LIST:
+					String parentQueryName = null;
+					if (artifact.getConfig().getFilters() != null) {
+						Element<?> securityContext = service.getSecurityContext();
+						if (securityContext != null) {
+							for (CRUDFilter filter : artifact.getConfig().getFilters()) {
+								if (securityContext.getName().equals(filter.getKey())) {
+									parentQueryName = filter.getAlias() == null ? filter.getKey() : filter.getAlias();
+									break;
+								}
+							}
+						}
+					}
+					if (parentQueryName == null && service.hasSecurityContextFilter()) {
+						throw new HTTPException(400, "A security context id is required");
+					}
+					context = pathParameters.get(parentQueryName);
+				break;
+			}
+			
+			if (action != null && !permissionHandler.hasPermission(token, context, action)) {
+				throw new HTTPException(token == null ? 401 : 403, "User does not have permission to execute the rest service", "User '" + (token == null ? Authenticator.ANONYMOUS : token.getName()) + "' does not have permission to run the CRUD service: " + service.getId(), token);
+			}
+		}
 		
 		String chosenLanguage = null;
 		// if we indicated that we want to use the language, we injected a query parameter to do so
@@ -282,8 +334,8 @@ public class CRUDListener implements EventHandler<HTTPRequest, HTTPResponse> {
 		switch (service.getType()) {
 			case CREATE:
 				input.set("instance", body);
-				if (pathParameters.get("parentId") != null) {
-					input.set("parentId", pathParameters.get("parentId"));
+				if (pathParameters.get("contextId") != null) {
+					input.set("contextId", pathParameters.get("contextId"));
 				}
 			break;
 			case UPDATE:
@@ -316,7 +368,7 @@ public class CRUDListener implements EventHandler<HTTPRequest, HTTPResponse> {
 			break;
 		}
 		
-		ServiceRuntime runtime = new ServiceRuntime(service, context);
+		ServiceRuntime runtime = new ServiceRuntime(service, executionContext);
 		// we set the service context to the web application, rest services can be mounted in multiple applications
 		ServiceUtils.setServiceContext(runtime, application.getId());
 		return runtime.run(input);

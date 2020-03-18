@@ -26,13 +26,15 @@ public interface CRUDProvider {
 			@WebParam(name = "transactionId") String transactionId,
 			@WebParam(name = "instance") Object object,
 			@WebParam(name = "language") String language,
-			@WebParam(name = "changeTracker") String changeTracker);
+			@WebParam(name = "changeTracker") String changeTracker,
+			@WebParam(name = "typeId") String typeId);
 	
 	public void update(@WebParam(name = "connectionId") String connectionId,
 			@WebParam(name = "transactionId") String transactionId,
 			@WebParam(name = "instance") Object object,
 			@WebParam(name = "language") String language,
-			@WebParam(name = "changeTracker") String changeTracker);
+			@WebParam(name = "changeTracker") String changeTracker,
+			@WebParam(name = "typeId") String typeId);
 	
 	public void delete(@WebParam(name = "connectionId") String connectionId,
 			@WebParam(name = "transactionId") String transactionId,

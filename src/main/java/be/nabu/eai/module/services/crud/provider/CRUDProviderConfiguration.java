@@ -19,6 +19,8 @@ public class CRUDProviderConfiguration {
 	
 	// you can blacklist fields at the provider level, this is mostly useful when you are working with a base type that has some fields that you want to automanage in the provider
 	private List<String> blacklistedFields;
+	
+	private Boolean primaryKeySecurityContext;
 
 	@XmlJavaTypeAdapter(value = ArtifactXMLAdapter.class)
 	@InterfaceFilter(implement = "be.nabu.eai.module.services.crud.api.CRUDProvider.list")
@@ -68,6 +70,13 @@ public class CRUDProviderConfiguration {
 	}
 	public void setBaseType(DefinedType baseType) {
 		this.baseType = baseType;
+	}
+	
+	public Boolean getPrimaryKeySecurityContext() {
+		return primaryKeySecurityContext;
+	}
+	public void setPrimaryKeySecurityContext(Boolean primaryKeySecurityContext) {
+		this.primaryKeySecurityContext = primaryKeySecurityContext;
 	}
 
 }

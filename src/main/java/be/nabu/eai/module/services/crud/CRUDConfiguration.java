@@ -25,7 +25,7 @@ public class CRUDConfiguration {
 	private List<String> createBlacklistFields, updateBlacklistFields, listBlacklistFields, updateRegenerateFields;
 	
 	// the field we want to use to check security context
-	private String securityContextField, parentField;
+	private String securityContextField;
 	
 	// we can also set roles
 	private List<String> createRole, updateRole, listRole, deleteRole;
@@ -38,8 +38,7 @@ public class CRUDConfiguration {
 	
 	// the name is necessary for some things like permissions, components...
 	// if none is set, we assume the root name of the document
-	// the parent name might also we relevant for example for paths
-	private String basePath, name, parentName;
+	private String basePath, name;
 
 	@InterfaceFilter(implement = "be.nabu.libs.services.jdbc.api.ChangeTracker.track")
 	@XmlJavaTypeAdapter(value = ArtifactXMLAdapter.class)
@@ -115,12 +114,6 @@ public class CRUDConfiguration {
 	public void setBasePath(String basePath) {
 		this.basePath = basePath;
 	}
-	public String getParentField() {
-		return parentField;
-	}
-	public void setParentField(String parentField) {
-		this.parentField = parentField;
-	}
 	public List<String> getListBlacklistFields() {
 		return listBlacklistFields;
 	}
@@ -144,12 +137,6 @@ public class CRUDConfiguration {
 	}
 	public void setName(String name) {
 		this.name = name;
-	}
-	public String getParentName() {
-		return parentName;
-	}
-	public void setParentName(String parentName) {
-		this.parentName = parentName;
 	}
 	@Comment(title = "Whether or not we want to use language features at all, if you turn this on, we expose language input parameters for the services and at the REST level, we use the implicit user language for listing")
 	public boolean isUseLanguage() {
