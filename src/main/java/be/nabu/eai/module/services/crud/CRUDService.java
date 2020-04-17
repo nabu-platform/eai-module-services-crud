@@ -121,6 +121,7 @@ public class CRUDService implements DefinedService, WebFragment, RESTFragment {
 				String transactionId = input == null ? null : (String) input.get("transactionId");
 				String language = input == null ? null : (String) input.get("language");
 				
+				ComplexContent output = getServiceInterface().getOutputDefinition().newInstance();
 				ComplexContent serviceInput = null;
 				Object object;
 				switch(type) {
@@ -167,6 +168,8 @@ public class CRUDService implements DefinedService, WebFragment, RESTFragment {
 						serviceInput.set("language", language);
 						serviceInput.set("typeId", artifact.getConfig().getCoreType().getId());
 						serviceInput.set("changeTracker", artifact.getConfig().getChangeTracker() == null ? null : artifact.getConfig().getChangeTracker().getId());
+						
+						output.set("created", createInstance);
 					break;
 					case UPDATE:
 						object = input == null ? null : input.get("instance");
@@ -207,6 +210,8 @@ public class CRUDService implements DefinedService, WebFragment, RESTFragment {
 							serviceInput.set("language", language);
 						}
 						serviceInput.set("changeTracker", artifact.getConfig().getChangeTracker() == null ? null : artifact.getConfig().getChangeTracker().getId());
+						
+						output.set("updated", updateInstance);
 					break;
 					case DELETE:
 						serviceInput = artifact.getConfig().getProvider().getConfig().getDeleteService().getServiceInterface().getInputDefinition().newInstance();
@@ -260,11 +265,15 @@ public class CRUDService implements DefinedService, WebFragment, RESTFragment {
 									}
 									// if we have a like, add "%"
 									if ("like".equals(newFilter.getOperator())) {
+										List<Object> wildCardValues = new ArrayList<Object>();
 										for (Object value : values) {
 											if (value instanceof String) {
 												value = "%" + value.toString() + "%";
 											}
+											wildCardValues.add(value);
 										}
+										newFilter.setValues(wildCardValues);
+										values = wildCardValues;
 									}
 								}
 								// if it is not an input, or actual input was provided, do it
@@ -284,7 +293,6 @@ public class CRUDService implements DefinedService, WebFragment, RESTFragment {
 				ServiceRuntime runtime = new ServiceRuntime(service, executionContext);
 				ComplexContent serviceOutput = runtime.run(serviceInput);
 				
-				ComplexContent output = getServiceInterface().getOutputDefinition().newInstance();
 				// in case of the read, we have some stuff to do still
 				switch(type) {
 					case LIST: 
@@ -406,6 +414,12 @@ public class CRUDService implements DefinedService, WebFragment, RESTFragment {
 			output.setName("output");
 			
 			switch(type) {
+				case CREATE:
+					output.add(new ComplexElementImpl("created", (ComplexType) artifact.getConfig().getCoreType(), output));
+				break;
+				case UPDATE:
+					output.add(new ComplexElementImpl("updated", updateIntermediaryInput, output));
+				break;
 				case LIST:
 					output.setSuperType(outputList);
 				break;

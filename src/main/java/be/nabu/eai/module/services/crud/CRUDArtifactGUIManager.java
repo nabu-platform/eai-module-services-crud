@@ -145,7 +145,7 @@ public class CRUDArtifactGUIManager extends BaseJAXBGUIManager<CRUDConfiguration
 				MainController.getInstance().setChanged();
 			}
 		});
-		HBox securityField = createField(securityContextField, "Security Context Field Field", "Configure the security context field for this type.");
+		HBox securityField = createField(securityContextField, "Security Context Field", "Configure the security context field for this type.");
 		main.getChildren().add(securityField);
 		
 		// list and create have security field of parent
