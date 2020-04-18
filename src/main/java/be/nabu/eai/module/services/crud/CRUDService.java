@@ -150,6 +150,10 @@ public class CRUDService implements DefinedService, WebFragment, RESTFragment {
 									if (UUID.class.isAssignableFrom(((SimpleType<?>) element.getType()).getInstanceClass())) {
 										createInstance.set(element.getName(), UUID.randomUUID());
 									}
+									else if (String.class.isAssignableFrom(((SimpleType<?>) element.getType()).getInstanceClass())) {
+										// we also set a uuid for a missing primary string key
+										createInstance.set(element.getName(), UUID.randomUUID().toString().replace("-", ""));
+									}
 								}
 								// if we have a date, we initiate it as "current", we assume something like created or modified
 								else if (Date.class.isAssignableFrom(((SimpleType<?>) element.getType()).getInstanceClass())) {
