@@ -9,6 +9,7 @@ import be.nabu.eai.api.Comment;
 import be.nabu.eai.api.InterfaceFilter;
 import be.nabu.eai.module.services.crud.provider.CRUDProviderArtifact;
 import be.nabu.eai.repository.jaxb.ArtifactXMLAdapter;
+import be.nabu.libs.artifacts.api.DataSourceProviderArtifact;
 import be.nabu.libs.services.api.DefinedService;
 import be.nabu.libs.types.api.DefinedType;
 
@@ -35,6 +36,8 @@ public class CRUDConfiguration {
 	private boolean useLanguage;
 	
 	private boolean useExplicitLanguage;
+	
+	private DataSourceProviderArtifact connection;
 	
 	// the name is necessary for some things like permissions, components...
 	// if none is set, we assume the root name of the document
@@ -152,6 +155,15 @@ public class CRUDConfiguration {
 	}
 	public void setUseExplicitLanguage(boolean useExplicitLanguage) {
 		this.useExplicitLanguage = useExplicitLanguage;
+	}
+	
+	@XmlJavaTypeAdapter(value = ArtifactXMLAdapter.class)
+	@Comment(title = "The data source to use by default for this connection")
+	public DataSourceProviderArtifact getConnection() {
+		return connection;
+	}
+	public void setConnection(DataSourceProviderArtifact connection) {
+		this.connection = connection;
 	}
 	
 }

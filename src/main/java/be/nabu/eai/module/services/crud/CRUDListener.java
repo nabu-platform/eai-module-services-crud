@@ -124,6 +124,7 @@ public class CRUDListener implements EventHandler<HTTPRequest, HTTPResponse> {
 						WebApplicationUtils.checkRole(application, token, artifact.getConfig().getUpdateRole());
 					}
 				break;
+				case GET:
 				case LIST: 
 					if (artifact.getConfig().getListRole() != null) {
 						WebApplicationUtils.checkRole(application, token, artifact.getConfig().getListRole());
@@ -136,7 +137,9 @@ public class CRUDListener implements EventHandler<HTTPRequest, HTTPResponse> {
 				break;
 			}
 			
-			HTTPResponse checkRateLimits = WebApplicationUtils.checkRateLimits(application, token, device, service.getPermissionAction(), null, request);
+			// maybe at some point we also want to allow for specific rate limit actions/contexts here?
+			// for now we are consistent with the default in REST services with no explicit action
+			HTTPResponse checkRateLimits = WebApplicationUtils.checkRateLimits(application, token, device, service.getId(), null, request);
 			if (checkRateLimits != null) {
 				return checkRateLimits;
 			}
@@ -183,6 +186,12 @@ public class CRUDListener implements EventHandler<HTTPRequest, HTTPResponse> {
 			
 			ExecutionContext newExecutionContext = application.getRepository().newExecutionContext(token);
 			ComplexContent output = call(newExecutionContext, token, uri, queryProperties, body, WebApplicationUtils.getLanguage(application, request));
+			
+			switch (service.getType()) {
+				case GET:
+					output = output == null ? null : (ComplexContent) output.get("result");
+				break;
+			}
 			
 			if (output != null) {
 				MarshallableBinding binding;
@@ -264,16 +273,34 @@ public class CRUDListener implements EventHandler<HTTPRequest, HTTPResponse> {
 		// if there is no context, you _must_ have a global permission which is in a way stricter than a specific context permission, so we should be able to do that at least
 		// check permissions
 		PermissionHandler permissionHandler = application.getPermissionHandler();
+		String action = service.getPermissionAction();
+		String context = null;
+		String parentQueryName = null;
+		if (CRUDType.LIST.equals(service.getType())) {
+			if (artifact.getConfig().getFilters() != null) {
+				Element<?> securityContext = service.getSecurityContext();
+				if (securityContext != null) {
+					for (CRUDFilter filter : artifact.getConfig().getFilters()) {
+						if (securityContext.getName().equals(filter.getKey())) {
+							parentQueryName = filter.getAlias() == null ? filter.getKey() : filter.getAlias();
+							break;
+						}
+					}
+				}
+			}
+			if (parentQueryName != null) {
+				context = pathParameters.get("contextId");
+			}
+		}
+		
 		if (permissionHandler != null) {
-			String action = service.getPermissionAction();
-			String context = null;
-			
 			switch(service.getType()) {
 				case CREATE:
 					if (pathParameters.get("contextId") != null) {
 						context = pathParameters.get("contextId");
 					}
 				break;
+				case GET:
 				case UPDATE:
 				case DELETE:
 					if (artifact.getConfig().getProvider().isPrimaryKeySecurityContext()) {
@@ -284,22 +311,9 @@ public class CRUDListener implements EventHandler<HTTPRequest, HTTPResponse> {
 					}
 				break;
 				case LIST:
-					String parentQueryName = null;
-					if (artifact.getConfig().getFilters() != null) {
-						Element<?> securityContext = service.getSecurityContext();
-						if (securityContext != null) {
-							for (CRUDFilter filter : artifact.getConfig().getFilters()) {
-								if (securityContext.getName().equals(filter.getKey())) {
-									parentQueryName = filter.getAlias() == null ? filter.getKey() : filter.getAlias();
-									break;
-								}
-							}
-						}
-					}
 					if (parentQueryName == null && service.hasSecurityContextFilter()) {
 						throw new HTTPException(400, "A security context id is required");
 					}
-					context = pathParameters.get(parentQueryName);
 				break;
 			}
 			
@@ -345,13 +359,23 @@ public class CRUDListener implements EventHandler<HTTPRequest, HTTPResponse> {
 					input.set("language", chosenLanguage);
 				}
 			break;
+			case GET:
 			case DELETE:
 				input.set("id", pathParameters.get("id"));
 			break;
 			case LIST:
-				input.set("limit", input.get("limit"));
-				input.set("offset", input.get("offset"));
-				input.set("orderBy", input.get("orderBy"));
+				List<String> limit = queryProperties.get("limit");
+				if (limit != null && !limit.isEmpty()) {
+					input.set("limit", limit.get(0));
+				}
+				List<String> offset = queryProperties.get("offset");
+				if (offset != null && !offset.isEmpty()) {
+					input.set("offset", offset.get(0));
+				}
+				List<String> orderBy = queryProperties.get("orderBy");
+				if (orderBy != null && !orderBy.isEmpty()) {
+					input.set("orderBy", orderBy);
+				}
 				if (artifact.getConfig().isUseLanguage() && chosenLanguage != null) {
 					input.set("language", chosenLanguage);
 				}
@@ -364,6 +388,9 @@ public class CRUDListener implements EventHandler<HTTPRequest, HTTPResponse> {
 							}
 						}
 					}
+				}
+				if (parentQueryName != null) {
+					input.set("filter/" + parentQueryName + "[0]", context);
 				}
 			break;
 		}

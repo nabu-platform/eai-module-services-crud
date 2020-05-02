@@ -63,15 +63,17 @@ public class CRUDService implements DefinedService, WebFragment, RESTFragment {
 	private DefinedStructure outputList;
 	private CRUDArtifact artifact;
 	private DefinedStructure updateIntermediaryInput;
+	private DefinedStructure singleOutput;
 	
 	public enum CRUDType {
 		CREATE,
 		LIST,
 		UPDATE,
-		DELETE
+		DELETE,
+		GET
 	}
 
-	public CRUDService(CRUDArtifact artifact, String id, CRUDType type, DefinedStructure createInput, DefinedStructure updateInput, DefinedStructure outputList, DefinedStructure updateIntermediaryInput) {
+	public CRUDService(CRUDArtifact artifact, String id, CRUDType type, DefinedStructure createInput, DefinedStructure updateInput, DefinedStructure outputList, DefinedStructure updateIntermediaryInput, DefinedStructure singleOutput) {
 		this.artifact = artifact;
 		this.id = id;
 		this.type = type;
@@ -79,6 +81,7 @@ public class CRUDService implements DefinedService, WebFragment, RESTFragment {
 		this.updateInput = updateInput;
 		this.outputList = outputList;
 		this.updateIntermediaryInput = updateIntermediaryInput;
+		this.singleOutput = singleOutput;
 	}
 	
 	@Override
@@ -120,6 +123,11 @@ public class CRUDService implements DefinedService, WebFragment, RESTFragment {
 				String connectionId = input == null ? null : (String) input.get("connectionId");
 				String transactionId = input == null ? null : (String) input.get("transactionId");
 				String language = input == null ? null : (String) input.get("language");
+				
+				// if we have configured a connection id, use that
+				if (connectionId == null && artifact.getConfig().getConnection() != null) {
+					connectionId = artifact.getConfig().getConnection().getId();
+				}
 				
 				ComplexContent output = getServiceInterface().getOutputDefinition().newInstance();
 				ComplexContent serviceInput = null;
@@ -230,6 +238,31 @@ public class CRUDService implements DefinedService, WebFragment, RESTFragment {
 //						serviceInput.set("language", language);
 						serviceInput.set("changeTracker", artifact.getConfig().getChangeTracker() == null ? null : artifact.getConfig().getChangeTracker().getId());
 					break;
+					case GET:
+						Object id = input == null ? null : input.get("id");
+						if (id == null) {
+							return null;
+						}
+						serviceInput = artifact.getConfig().getProvider().getConfig().getListService().getServiceInterface().getInputDefinition().newInstance();
+						serviceInput.set("typeId", artifact.getConfig().getCoreType().getId());
+						serviceInput.set("connectionId", connectionId);
+						serviceInput.set("transactionId", transactionId);
+						if (artifact.getConfig().isUseLanguage()) {
+							serviceInput.set("language", language);
+						}
+						serviceInput.set("limit", 1);
+						CRUDFilter idFilter = new CRUDFilter();
+						Element<?> typePrimary = getPrimary((ComplexType) artifact.getConfig().getCoreType());
+						if (typePrimary == null) {
+							throw new IllegalStateException("Can not find primary key");
+						}
+						idFilter.setKey(typePrimary.getName());
+						idFilter.setOperator("=");
+						idFilter.setOr(false);
+						idFilter.setCaseInsensitive(false);
+						idFilter.setValues(Arrays.asList(id));
+						serviceInput.set("filters[0]", idFilter);
+					break;
 					case LIST:
 						serviceInput = artifact.getConfig().getProvider().getConfig().getListService().getServiceInterface().getInputDefinition().newInstance();
 						serviceInput.set("typeId", artifact.getConfig().getCoreType().getId());
@@ -245,7 +278,14 @@ public class CRUDService implements DefinedService, WebFragment, RESTFragment {
 						// the previous removed one
 						CRUDFilter removed = null;
 						if (artifact.getConfig().getFilters() != null) {
+							List<String> inputOperators = Arrays.asList("=", "<>", ">", "<", ">=", "<=", "like", "ilike");
 							for (CRUDFilter filter : artifact.getConfig().getFilters()) {
+								// no operator or no key is invalid
+								// additionally if you have an input operator but don't have the flag "isinput" checked, it can only produce invalid results
+								if (filter.getOperator() == null || filter.getKey() == null
+										|| (!filter.isInput() && inputOperators.contains(filter.getOperator()))) {
+									continue;
+								}
 								// we don't want the ilike statements to make it to the end
 								CRUDFilter newFilter = new CRUDFilter();
 								newFilter.setKey(filter.getKey());
@@ -311,6 +351,14 @@ public class CRUDService implements DefinedService, WebFragment, RESTFragment {
 							}
 						}
 					break;
+					case GET:
+						if (serviceOutput.get("results") != null) {
+							ListResult result = TypeUtils.getAsBean((ComplexContent) serviceOutput.get("results"), ListResult.class);
+							if (result.getResults() != null && !result.getResults().isEmpty()) {
+								output.set("result", result.getResults().get(0));
+							}
+						}
+					break;
 				}
 				return output;
 			}
@@ -360,6 +408,12 @@ public class CRUDService implements DefinedService, WebFragment, RESTFragment {
 				break;
 				case DELETE:
 					input.add(new SimpleElementImpl("id", (SimpleType<?>) primary.getType(), input));
+				break;
+				case GET:
+					input.add(new SimpleElementImpl("id", (SimpleType<?>) primary.getType(), input));
+					if (artifact.getConfig().isUseLanguage()) {
+						input.add(new SimpleElementImpl<String>("language", SimpleTypeWrapperFactory.getInstance().getWrapper().wrap(String.class), input, new ValueImpl<Integer>(MinOccursProperty.getInstance(), 0)));
+					}
 				break;
 				case LIST:
 					if (artifact.getConfig().isUseLanguage()) {
@@ -426,6 +480,9 @@ public class CRUDService implements DefinedService, WebFragment, RESTFragment {
 				break;
 				case LIST:
 					output.setSuperType(outputList);
+				break;
+				case GET:
+					output.add(new ComplexElementImpl("result", singleOutput, output));
 				break;
 			}
 			
@@ -497,6 +554,8 @@ public class CRUDService implements DefinedService, WebFragment, RESTFragment {
 				return name + ".list";
 			case UPDATE:
 				return name + ".update";
+			case GET:
+				return name + ".get";
 		}
 		return null;
 	}
@@ -517,6 +576,9 @@ public class CRUDService implements DefinedService, WebFragment, RESTFragment {
 			break;
 			case UPDATE:
 				permissions.add(new PermissionImplementation(null, name + ".update", this.artifact.getConfig().getUpdateRole()));
+			break;
+			case GET:
+				permissions.add(new PermissionImplementation(null, name + ".get", this.artifact.getConfig().getListRole()));
 			break;
 		}
 		return permissions;
@@ -584,6 +646,7 @@ public class CRUDService implements DefinedService, WebFragment, RESTFragment {
 			path += "/";
 		}
 		switch(type) {
+			case GET:
 			case UPDATE:
 			case DELETE:
 				// if we have a security context and the id is not a valid one, add it
@@ -650,6 +713,7 @@ public class CRUDService implements DefinedService, WebFragment, RESTFragment {
 	public Type getOutput() {
 		switch (type) {
 			case LIST: return outputList;
+			case GET: return singleOutput;
 			default: return null;
 		}
 	}
@@ -706,6 +770,7 @@ public class CRUDService implements DefinedService, WebFragment, RESTFragment {
 		Element<?> primary = getPrimary((ComplexType) artifact.getConfig().getCoreType());
 		Element<?> securityContext = getSecurityContext();
 		switch(type) {
+			case GET:
 			case DELETE: 
 			case UPDATE: 
 				parameters.add(new SimpleElementImpl("id", (SimpleType) primary.getType(), input)); 

@@ -10,6 +10,7 @@ import java.util.List;
 import be.nabu.eai.developer.MainController;
 import be.nabu.eai.developer.managers.base.BaseJAXBGUIManager;
 import be.nabu.eai.developer.managers.util.SimpleProperty;
+import be.nabu.eai.module.services.crud.provider.CRUDProviderArtifact;
 import be.nabu.eai.repository.resources.RepositoryEntry;
 import be.nabu.libs.property.api.Property;
 import be.nabu.libs.property.api.Value;
@@ -60,6 +61,7 @@ public class CRUDArtifactGUIManager extends BaseJAXBGUIManager<CRUDConfiguration
 				}
 			}
 		}
+		artifact.getConfig().setProvider((CRUDProviderArtifact) entry.getRepository().resolve("nabu.services.crud.provider.basic.provider"));
 		if (artifact.getConfig().getCoreType() == null) {
 			throw new IllegalStateException("You need to define a type");
 		}
@@ -430,6 +432,7 @@ public class CRUDArtifactGUIManager extends BaseJAXBGUIManager<CRUDConfiguration
 	private ComboBox<String> newFieldCombo(CRUDArtifact instance) {
 		ComboBox<String> fields = new ComboBox<String>();
 		fields.getItems().addAll(fields(instance));
+		fields.getItems().add(0, null);
 		return fields;
 	}
 	@Override

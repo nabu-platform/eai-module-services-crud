@@ -105,13 +105,14 @@ public class CRUDArtifactManager extends JAXBArtifactManager<CRUDConfiguration, 
 				updateInput = addChild(entries, types, "updateInput", updateIntermediaryInput, blacklist);
 				synchronize(updateInput, (ComplexType) artifact.getConfig().getCoreType());
 			}
+			DefinedStructure output = null;
 			// if we have a provider with a create, add it
 			if (artifact.getConfig().getProvider() != null && artifact.getConfig().getProvider().getConfig().getListService() != null) {
 				List<String> blacklist = artifact.getConfig().getListBlacklistFields();
 				// let's add to that
 				blacklist = blacklist == null ? new ArrayList<String>() : new ArrayList<String>(blacklist);
-				// generate the input
-				DefinedStructure output = addChild(entries, types, "output", artifact.getConfig().getCoreType(), blacklist);
+				// generate the single output
+				output = addChild(entries, types, "output", artifact.getConfig().getCoreType(), blacklist);
 				synchronize(output, (ComplexType) artifact.getConfig().getCoreType());
 				
 				outputList = new DefinedStructure();
@@ -132,16 +133,17 @@ public class CRUDArtifactManager extends JAXBArtifactManager<CRUDConfiguration, 
 			// note that we can only add update services & list services if we have a primary key
 			ModifiableEntry services = EAIRepositoryUtils.getParent(parent, "services", true);
 			if (artifact.getConfig().getProvider() != null && artifact.getConfig().getProvider().getConfig().getCreateService() != null) {
-				addChild(entries, services, "create", new CRUDService(artifact, services.getId() + ".create", CRUDType.CREATE, createInput, updateInput, outputList, updateIntermediaryInput));
+				addChild(entries, services, "create", new CRUDService(artifact, services.getId() + ".create", CRUDType.CREATE, createInput, updateInput, outputList, updateIntermediaryInput, output));
 			}
 			if (!primary.isEmpty() && artifact.getConfig().getProvider() != null && artifact.getConfig().getProvider().getConfig().getUpdateService() != null) {
-				addChild(entries, services, "update", new CRUDService(artifact, services.getId() + ".update", CRUDType.UPDATE, createInput, updateInput, outputList, updateIntermediaryInput));
+				addChild(entries, services, "update", new CRUDService(artifact, services.getId() + ".update", CRUDType.UPDATE, createInput, updateInput, outputList, updateIntermediaryInput, output));
 			}
 			if (artifact.getConfig().getProvider() != null && artifact.getConfig().getProvider().getConfig().getListService() != null) {
-				addChild(entries, services, "list", new CRUDService(artifact, services.getId() + ".list", CRUDType.LIST, createInput, updateInput, outputList, updateIntermediaryInput));
+				addChild(entries, services, "list", new CRUDService(artifact, services.getId() + ".list", CRUDType.LIST, createInput, updateInput, outputList, updateIntermediaryInput, output));
+				addChild(entries, services, "get", new CRUDService(artifact, services.getId() + ".get", CRUDType.GET, createInput, updateInput, outputList, updateIntermediaryInput, output));
 			}
 			if (!primary.isEmpty() && artifact.getConfig().getProvider() != null && artifact.getConfig().getProvider().getConfig().getDeleteService() != null) {
-				addChild(entries, services, "delete", new CRUDService(artifact, services.getId() + ".delete", CRUDType.DELETE, createInput, updateInput, outputList, updateIntermediaryInput));
+				addChild(entries, services, "delete", new CRUDService(artifact, services.getId() + ".delete", CRUDType.DELETE, createInput, updateInput, outputList, updateIntermediaryInput, output));
 			}
 		}
 		return entries;
@@ -186,6 +188,26 @@ public class CRUDArtifactManager extends JAXBArtifactManager<CRUDConfiguration, 
 		node.setArtifactClass(DefinedService.class);
 		node.setArtifact(service);
 		node.setLeaf(true);
+		if (service.getId().endsWith(".get")) {
+			node.setName("Get");
+//			node.setDescription("Get a specific instance of this type by its identifier");
+		}
+		else if (service.getId().endsWith(".list")) {
+			node.setName("List");
+//			node.setDescription("Search instances of this type by configurable filters");
+		}
+		else if (service.getId().endsWith(".update")) {
+			node.setName("Update");
+//			node.setDescription("Update the data of an instance");
+		}
+		else if (service.getId().endsWith(".delete")) {
+			node.setName("Update");
+//			node.setDescription("Delete an instance of this type");
+		}
+		else if (service.getId().endsWith(".create")) {
+			node.setName("Create");
+//			node.setDescription("Create a new instance of this type");
+		}
 		Entry childEntry = new MemoryEntry(services.getRepository(), services, node, service.getId(), name);
 		node.setEntry(childEntry);
 		services.addChildren(childEntry);
