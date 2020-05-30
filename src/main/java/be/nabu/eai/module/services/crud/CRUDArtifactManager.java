@@ -140,7 +140,9 @@ public class CRUDArtifactManager extends JAXBArtifactManager<CRUDConfiguration, 
 			}
 			if (artifact.getConfig().getProvider() != null && artifact.getConfig().getProvider().getConfig().getListService() != null) {
 				addChild(entries, services, "list", new CRUDService(artifact, services.getId() + ".list", CRUDType.LIST, createInput, updateInput, outputList, updateIntermediaryInput, output));
-				addChild(entries, services, "get", new CRUDService(artifact, services.getId() + ".get", CRUDType.GET, createInput, updateInput, outputList, updateIntermediaryInput, output));
+				if (!primary.isEmpty()) {
+					addChild(entries, services, "get", new CRUDService(artifact, services.getId() + ".get", CRUDType.GET, createInput, updateInput, outputList, updateIntermediaryInput, output));
+				}
 			}
 			if (!primary.isEmpty() && artifact.getConfig().getProvider() != null && artifact.getConfig().getProvider().getConfig().getDeleteService() != null) {
 				addChild(entries, services, "delete", new CRUDService(artifact, services.getId() + ".delete", CRUDType.DELETE, createInput, updateInput, outputList, updateIntermediaryInput, output));
@@ -201,7 +203,7 @@ public class CRUDArtifactManager extends JAXBArtifactManager<CRUDConfiguration, 
 //			node.setDescription("Update the data of an instance");
 		}
 		else if (service.getId().endsWith(".delete")) {
-			node.setName("Update");
+			node.setName("Delete");
 //			node.setDescription("Delete an instance of this type");
 		}
 		else if (service.getId().endsWith(".create")) {

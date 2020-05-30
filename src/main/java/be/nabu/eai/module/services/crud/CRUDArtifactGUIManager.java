@@ -97,10 +97,8 @@ public class CRUDArtifactGUIManager extends BaseJAXBGUIManager<CRUDConfiguration
 		generalPane.getChildren().add(box);
 		generalPane.getStyleClass().add("configuration-pane");
 		generalPane.getStyleClass().add("configuration-pane-basic");
-		TitledPane general = new TitledPane("General", generalPane);
-		accordion.getPanes().add(general);
-
-		accordion.setExpandedPane(general);
+		// the default settings should be good enough?
+		TitledPane general = new TitledPane("Advanced", generalPane);
 		
 		AnchorPane listPane = new AnchorPane();
 		populateList(instance, listPane);
@@ -122,6 +120,10 @@ public class CRUDArtifactGUIManager extends BaseJAXBGUIManager<CRUDConfiguration
 		listPane.getStyleClass().add("configuration-pane-basic");
 		TitledPane update = new TitledPane("Update", updatePane);
 		accordion.getPanes().add(update);
+		
+		accordion.getPanes().add(general);
+		
+		accordion.setExpandedPane(list);
 		
 		pane.getChildren().add(accordion);
 		maximize(accordion);
