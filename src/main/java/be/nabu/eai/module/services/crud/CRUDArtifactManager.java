@@ -69,7 +69,7 @@ public class CRUDArtifactManager extends JAXBArtifactManager<CRUDConfiguration, 
 					blacklist.add(artifact.getConfig().getSecurityContextField());
 				}
 				// generate the input
-				createInput = addChild(entries, types, "createInput", artifact.getConfig().getCoreType(), blacklist);
+				createInput = addChild(artifact, entries, types, "createInput", artifact.getConfig().getCoreType(), blacklist);
 				synchronize(createInput, (ComplexType) artifact.getConfig().getCoreType());
 			}
 			// if we have a provider with a create, add it
@@ -88,7 +88,7 @@ public class CRUDArtifactManager extends JAXBArtifactManager<CRUDConfiguration, 
 				blacklist.addAll(getGenerated((ComplexType) artifact.getConfig().getCoreType()));
 				// remove any generated that are also the primary, we need to keep the primary for update reference
 				blacklist.removeAll(primary);
-				updateIntermediaryInput = addChild(entries, types, "updateIntermediaryInput", artifact.getConfig().getCoreType(), new ArrayList<String>(blacklist));
+				updateIntermediaryInput = addChild(artifact, entries, types, "updateIntermediaryInput", artifact.getConfig().getCoreType(), new ArrayList<String>(blacklist));
 				synchronize(updateIntermediaryInput, (ComplexType) artifact.getConfig().getCoreType());
 				
 				// we don't need to blacklist again as we will build upon the intermediary
@@ -102,7 +102,7 @@ public class CRUDArtifactManager extends JAXBArtifactManager<CRUDConfiguration, 
 					blacklist.addAll(artifact.getConfig().getUpdateRegenerateFields());
 				}
 				// generate the input
-				updateInput = addChild(entries, types, "updateInput", updateIntermediaryInput, blacklist);
+				updateInput = addChild(artifact, entries, types, "updateInput", updateIntermediaryInput, blacklist);
 				synchronize(updateInput, (ComplexType) artifact.getConfig().getCoreType());
 			}
 			DefinedStructure output = null;
@@ -112,7 +112,7 @@ public class CRUDArtifactManager extends JAXBArtifactManager<CRUDConfiguration, 
 				// let's add to that
 				blacklist = blacklist == null ? new ArrayList<String>() : new ArrayList<String>(blacklist);
 				// generate the single output
-				output = addChild(entries, types, "output", artifact.getConfig().getCoreType(), blacklist);
+				output = addChild(artifact, entries, types, "output", artifact.getConfig().getCoreType(), blacklist);
 				synchronize(output, (ComplexType) artifact.getConfig().getCoreType());
 				
 				outputList = new DefinedStructure();
@@ -124,7 +124,7 @@ public class CRUDArtifactManager extends JAXBArtifactManager<CRUDConfiguration, 
 				node.setArtifactClass(DefinedStructure.class);
 				node.setArtifact(outputList);
 				node.setLeaf(true);
-				Entry childEntry = new MemoryEntry(types.getRepository(), types, node, outputList.getId(), "outputList");
+				Entry childEntry = new MemoryEntry(artifact.getId(), types.getRepository(), types, node, outputList.getId(), "outputList");
 				node.setEntry(childEntry);
 				types.addChildren(childEntry);
 				entries.add(childEntry);
@@ -133,19 +133,19 @@ public class CRUDArtifactManager extends JAXBArtifactManager<CRUDConfiguration, 
 			// note that we can only add update services & list services if we have a primary key
 			ModifiableEntry services = EAIRepositoryUtils.getParent(parent, "services", true);
 			if (artifact.getConfig().getProvider() != null && artifact.getConfig().getProvider().getConfig().getCreateService() != null) {
-				addChild(entries, services, "create", new CRUDService(artifact, services.getId() + ".create", CRUDType.CREATE, createInput, updateInput, outputList, updateIntermediaryInput, output));
+				addChild(artifact, entries, services, "create", new CRUDService(artifact, services.getId() + ".create", CRUDType.CREATE, createInput, updateInput, outputList, updateIntermediaryInput, output));
 			}
 			if (!primary.isEmpty() && artifact.getConfig().getProvider() != null && artifact.getConfig().getProvider().getConfig().getUpdateService() != null) {
-				addChild(entries, services, "update", new CRUDService(artifact, services.getId() + ".update", CRUDType.UPDATE, createInput, updateInput, outputList, updateIntermediaryInput, output));
+				addChild(artifact, entries, services, "update", new CRUDService(artifact, services.getId() + ".update", CRUDType.UPDATE, createInput, updateInput, outputList, updateIntermediaryInput, output));
 			}
 			if (artifact.getConfig().getProvider() != null && artifact.getConfig().getProvider().getConfig().getListService() != null) {
-				addChild(entries, services, "list", new CRUDService(artifact, services.getId() + ".list", CRUDType.LIST, createInput, updateInput, outputList, updateIntermediaryInput, output));
+				addChild(artifact, entries, services, "list", new CRUDService(artifact, services.getId() + ".list", CRUDType.LIST, createInput, updateInput, outputList, updateIntermediaryInput, output));
 				if (!primary.isEmpty()) {
-					addChild(entries, services, "get", new CRUDService(artifact, services.getId() + ".get", CRUDType.GET, createInput, updateInput, outputList, updateIntermediaryInput, output));
+					addChild(artifact, entries, services, "get", new CRUDService(artifact, services.getId() + ".get", CRUDType.GET, createInput, updateInput, outputList, updateIntermediaryInput, output));
 				}
 			}
 			if (!primary.isEmpty() && artifact.getConfig().getProvider() != null && artifact.getConfig().getProvider().getConfig().getDeleteService() != null) {
-				addChild(entries, services, "delete", new CRUDService(artifact, services.getId() + ".delete", CRUDType.DELETE, createInput, updateInput, outputList, updateIntermediaryInput, output));
+				addChild(artifact, entries, services, "delete", new CRUDService(artifact, services.getId() + ".delete", CRUDType.DELETE, createInput, updateInput, outputList, updateIntermediaryInput, output));
 			}
 		}
 		return entries;
@@ -185,7 +185,7 @@ public class CRUDArtifactManager extends JAXBArtifactManager<CRUDConfiguration, 
 		return generated;
 	}
 	
-	private void addChild(List<Entry> entries, ModifiableEntry services, String name, DefinedService service) {
+	private void addChild(CRUDArtifact artifact, List<Entry> entries, ModifiableEntry services, String name, DefinedService service) {
 		EAINode node = new EAINode();
 		node.setArtifactClass(DefinedService.class);
 		node.setArtifact(service);
@@ -210,13 +210,13 @@ public class CRUDArtifactManager extends JAXBArtifactManager<CRUDConfiguration, 
 			node.setName("Create");
 //			node.setDescription("Create a new instance of this type");
 		}
-		Entry childEntry = new MemoryEntry(services.getRepository(), services, node, service.getId(), name);
+		Entry childEntry = new MemoryEntry(artifact.getId(), services.getRepository(), services, node, service.getId(), name);
 		node.setEntry(childEntry);
 		services.addChildren(childEntry);
 		entries.add(childEntry);
 	}
 	
-	private DefinedStructure addChild(List<Entry> entries, ModifiableEntry types, String name, DefinedType parent, List<String> fieldsToBlacklist) {
+	private DefinedStructure addChild(CRUDArtifact artifact, List<Entry> entries, ModifiableEntry types, String name, DefinedType parent, List<String> fieldsToBlacklist) {
 		EAINode node = new EAINode();
 		node.setArtifactClass(DefinedStructure.class);
 		DefinedStructure structure = new DefinedStructure();
@@ -226,7 +226,7 @@ public class CRUDArtifactManager extends JAXBArtifactManager<CRUDConfiguration, 
 		setBlacklist(fieldsToBlacklist, structure);
 		node.setArtifact(structure);
 		node.setLeaf(true);
-		Entry childEntry = new MemoryEntry(types.getRepository(), types, node, id, name);
+		Entry childEntry = new MemoryEntry(artifact.getId(), types.getRepository(), types, node, id, name);
 		node.setEntry(childEntry);
 		types.addChildren(childEntry);
 		entries.add(childEntry);

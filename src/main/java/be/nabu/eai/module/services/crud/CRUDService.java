@@ -15,6 +15,8 @@ import be.nabu.eai.module.web.application.WebApplication;
 import be.nabu.eai.module.web.application.WebFragment;
 import be.nabu.eai.module.web.application.api.PermissionWithRole;
 import be.nabu.eai.module.web.application.api.RESTFragment;
+import be.nabu.libs.artifacts.api.ArtifactWithExceptions;
+import be.nabu.libs.artifacts.api.ExceptionDescription;
 import be.nabu.libs.authentication.api.Permission;
 import be.nabu.libs.events.api.EventSubscription;
 import be.nabu.libs.http.api.HTTPRequest;
@@ -53,7 +55,7 @@ import be.nabu.libs.types.structure.Structure;
 //		-> maybe include an extension requirement in this? basically we say you have to extend a certain document, we list fields from there
 // -> we want additional configuration (perhaps a configuration document that is configured in the provider?)
 // -> for example for CMS nodes you can configure the groups/roles etc
-public class CRUDService implements DefinedService, WebFragment, RESTFragment {
+public class CRUDService implements DefinedService, WebFragment, RESTFragment, ArtifactWithExceptions {
 
 	private String id;
 	private CRUDType type;
@@ -789,5 +791,17 @@ public class CRUDService implements DefinedService, WebFragment, RESTFragment {
 				}
 		}
 		return parameters;
+	}
+
+	@Override
+	public List<ExceptionDescription> getExceptions() {
+		Service service;
+		switch(type) {
+			case CREATE: service = artifact.getConfig().getProvider().getConfig().getCreateService(); break;
+			case UPDATE: service = artifact.getConfig().getProvider().getConfig().getUpdateService(); break;
+			case DELETE: service = artifact.getConfig().getProvider().getConfig().getDeleteService(); break;
+			default: service = artifact.getConfig().getProvider().getConfig().getListService(); 
+		}
+		return !(service instanceof ArtifactWithExceptions) ? null : ((ArtifactWithExceptions) service).getExceptions();
 	}
 }
