@@ -4,6 +4,7 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 
+import be.nabu.eai.module.services.crud.CRUDConfiguration.ForeignNameField;
 import be.nabu.eai.module.services.crud.CRUDService.CRUDType;
 import be.nabu.eai.module.services.crud.provider.CRUDProviderArtifact;
 import be.nabu.eai.repository.EAINode;
@@ -14,6 +15,7 @@ import be.nabu.eai.repository.api.ModifiableEntry;
 import be.nabu.eai.repository.api.Repository;
 import be.nabu.eai.repository.managers.base.JAXBArtifactManager;
 import be.nabu.eai.repository.resources.MemoryEntry;
+import be.nabu.libs.artifacts.api.Artifact;
 import be.nabu.libs.property.api.Value;
 import be.nabu.libs.resources.api.ResourceContainer;
 import be.nabu.libs.services.api.DefinedService;
@@ -23,13 +25,17 @@ import be.nabu.libs.types.api.DefinedType;
 import be.nabu.libs.types.api.Element;
 import be.nabu.libs.types.api.ModifiableComplexType;
 import be.nabu.libs.types.base.ComplexElementImpl;
+import be.nabu.libs.types.base.TypeBaseUtils;
 import be.nabu.libs.types.base.ValueImpl;
 import be.nabu.libs.types.java.BeanResolver;
 import be.nabu.libs.types.properties.CollectionNameProperty;
 import be.nabu.libs.types.properties.DuplicateProperty;
+import be.nabu.libs.types.properties.ForeignKeyProperty;
+import be.nabu.libs.types.properties.ForeignNameProperty;
 import be.nabu.libs.types.properties.GeneratedProperty;
 import be.nabu.libs.types.properties.MaxOccursProperty;
 import be.nabu.libs.types.properties.MinOccursProperty;
+import be.nabu.libs.types.properties.NameProperty;
 import be.nabu.libs.types.properties.PrimaryKeyProperty;
 import be.nabu.libs.types.properties.RestrictProperty;
 import be.nabu.libs.types.structure.DefinedStructure;
@@ -114,6 +120,28 @@ public class CRUDArtifactManager extends JAXBArtifactManager<CRUDConfiguration, 
 				// generate the single output
 				output = addChild(artifact, entries, types, "output", artifact.getConfig().getCoreType(), blacklist);
 				synchronize(output, (ComplexType) artifact.getConfig().getCoreType());
+				// we add the "extended" fields
+				if (artifact.getConfig().getForeignFields() != null) {
+					for (ForeignNameField field : artifact.getConfig().getForeignFields()) {
+						// we need the same stats as the target (so same simple type, same optional-ness etc)
+						String[] split = field.getForeignName().split(":");
+						Element<?> element = ((ComplexType) artifact.getConfig().getCoreType()).get(split[0]);
+						if (element != null) {
+							Value<String> property = element.getProperty(ForeignKeyProperty.getInstance());
+							if (property != null && property.getValue() != null) {
+								String[] split2 = property.getValue().split(":");
+								Artifact resolve = artifact.getRepository().resolve(split2[0]);
+								if (resolve instanceof ComplexType) {
+									Element<?> targetElement = ((ComplexType) resolve).get(split[1]);
+									Element<?> clone = TypeBaseUtils.clone(targetElement, output);
+									clone.setProperty(new ValueImpl<String>(ForeignNameProperty.getInstance(), field.getForeignName()));
+									clone.setProperty(new ValueImpl<String>(NameProperty.getInstance(), field.getLocalName()));
+									output.add(clone);
+								}
+							}
+						}
+					}
+				}
 				
 				outputList = new DefinedStructure();
 				outputList.setName(artifact.getConfig().getCoreType().getName() + "List");

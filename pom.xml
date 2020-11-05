@@ -72,6 +72,11 @@
 			<artifactId>eai-module-http-server</artifactId>
 			<scope>provided</scope>
 		</dependency>
+		<dependency>
+			<groupId>be.nabu.libs.services</groupId>
+			<artifactId>services-jdbc</artifactId>
+			<scope>provided</scope>
+		</dependency>
 	</dependencies>
 
 </project>

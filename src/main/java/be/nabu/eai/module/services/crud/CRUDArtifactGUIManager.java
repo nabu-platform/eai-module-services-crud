@@ -5,25 +5,32 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.Date;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
+import be.nabu.eai.api.NamingConvention;
 import be.nabu.eai.developer.MainController;
 import be.nabu.eai.developer.managers.base.BaseJAXBGUIManager;
 import be.nabu.eai.developer.managers.util.SimpleProperty;
+import be.nabu.eai.module.services.crud.CRUDConfiguration.ForeignNameField;
 import be.nabu.eai.module.services.crud.provider.CRUDProviderArtifact;
 import be.nabu.eai.repository.resources.RepositoryEntry;
 import be.nabu.libs.property.api.Property;
 import be.nabu.libs.property.api.Value;
+import be.nabu.libs.services.jdbc.JDBCUtils;
 import be.nabu.libs.types.TypeUtils;
 import be.nabu.libs.types.api.ComplexType;
 import be.nabu.libs.types.api.DefinedType;
 import be.nabu.libs.types.api.Element;
 import be.nabu.libs.types.api.SimpleType;
+import be.nabu.libs.types.properties.ForeignKeyProperty;
 import javafx.beans.value.ChangeListener;
 import javafx.beans.value.ObservableValue;
 import javafx.event.ActionEvent;
 import javafx.event.EventHandler;
 import javafx.geometry.Insets;
+import javafx.geometry.Orientation;
 import javafx.geometry.Pos;
 import javafx.scene.Node;
 import javafx.scene.control.Accordion;
@@ -31,8 +38,10 @@ import javafx.scene.control.Button;
 import javafx.scene.control.CheckBox;
 import javafx.scene.control.ComboBox;
 import javafx.scene.control.Label;
+import javafx.scene.control.Separator;
 import javafx.scene.control.TextField;
 import javafx.scene.control.TitledPane;
+import javafx.scene.input.MouseEvent;
 import javafx.scene.layout.AnchorPane;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.Pane;
@@ -76,7 +85,7 @@ public class CRUDArtifactGUIManager extends BaseJAXBGUIManager<CRUDConfiguration
 	@Override
 	protected List<String> getBlacklistedProperties() {
 		return Arrays.asList("createBlacklistFields", "updateBlacklistFields", "listBlacklistFields", "updateRegenerateFields",
-				"securityContextField", "parentField", "filters");
+				"securityContextField", "parentField", "filters", "foreignFields");
 	}
 
 	@Override
@@ -140,7 +149,7 @@ public class CRUDArtifactGUIManager extends BaseJAXBGUIManager<CRUDConfiguration
 		VBox main = new VBox();
 		
 		// select the security context field
-		ComboBox<String> securityContextField = newFieldCombo(instance);
+		ComboBox<String> securityContextField = newFieldCombo(instance, false);
 		securityContextField.getSelectionModel().select(instance.getConfig().getSecurityContextField());
 		securityContextField.getSelectionModel().selectedItemProperty().addListener(new ChangeListener<String>() {
 			@Override
@@ -279,7 +288,7 @@ public class CRUDArtifactGUIManager extends BaseJAXBGUIManager<CRUDConfiguration
 					MainController.getInstance().setChanged();
 				}
 			});
-			ComboBox<String> field = newFieldCombo(instance);
+			ComboBox<String> field = newFieldCombo(instance, true);
 			field.getSelectionModel().select(filter.getKey());
 			field.getSelectionModel().selectedItemProperty().addListener(new ChangeListener<String>() {
 				@Override
@@ -389,11 +398,155 @@ public class CRUDArtifactGUIManager extends BaseJAXBGUIManager<CRUDConfiguration
 			instance.getConfig().setListBlacklistFields(new ArrayList<String>());
 		}
 		populateChecklist(instance, main, instance.getConfig().getListBlacklistFields(), new ArrayList<String>(), false);
+		drawForeignNameFields(instance, main);
+	}
+	
+	// currently we are limited to selecting from the table itself, not yet parent tables etc
+	// this is possible but...complex
+	private Map<String, List<String>> getForeignFields(CRUDArtifact instance) {
+		Map<String, List<String>> fields = new HashMap<String, List<String>>();
+		for (Element<?> element : TypeUtils.getAllChildren((ComplexType) instance.getConfig().getCoreType())) {
+			Value<String> property = element.getProperty(ForeignKeyProperty.getInstance());
+			if (property != null && property.getValue() != null) {
+				String[] split = property.getValue().split(":");
+				DefinedType referencedType = (DefinedType) instance.getRepository().resolve(split[0]);
+				if (referencedType != null) {
+					List<String> list = new ArrayList<String>();
+					for (Element<?> child : JDBCUtils.getFieldsInTable((ComplexType) referencedType)) {
+						list.add(child.getName());
+					}
+					fields.put(element.getName(), list);
+				}
+			}
+		}
+		return fields;
+	}
+	
+	private void drawForeignNameFields(CRUDArtifact instance, VBox main) {
+		Map<String, List<String>> foreignFields = getForeignFields(instance);
+		if (!foreignFields.isEmpty()) {
+			Separator separator = new Separator(Orientation.HORIZONTAL);
+			main.getChildren().add(separator);
+			VBox.setMargin(separator, new Insets(20, 0, 10, 0));
+			// if we have any foreign keys, we can use that to add foreign fields
+			Label label = new Label("Add fields from referenced tables:");
+			VBox.setMargin(label, new Insets(10, 0, 10, 0));
+			main.getChildren().add(label);
+			
+			VBox vbox = new VBox();
+			main.getChildren().add(vbox);
+			drawExistingFields(instance, vbox, foreignFields);
+		}
+	}
+	
+	private void drawExistingFields(CRUDArtifact instance, VBox main, Map<String, List<String>> foreignFields) {
+		main.getChildren().clear();
+		// we first render the already added keys
+		if (instance.getConfig().getForeignFields() != null) {
+			for (ForeignNameField field : instance.getConfig().getForeignFields()) {
+				HBox box = new HBox();
+				Label localName = new Label(field.getLocalName());
+				localName.setPadding(new Insets(5));
+				localName.getStyleClass().add("crud-field-name");
+				
+				Label remoteName = new Label("(" + field.getForeignName() + ")");
+				remoteName.setPadding(new Insets(5));
+				remoteName.getStyleClass().add("crud-foreign-name");
+				
+				Label remove = new Label("x");
+				remove.setPadding(new Insets(10));
+				remove.getStyleClass().add("crud-remove");
+				
+				// remove a field
+				remove.addEventHandler(MouseEvent.MOUSE_CLICKED, new EventHandler<MouseEvent>() {
+					@Override
+					public void handle(MouseEvent arg0) {
+						instance.getConfig().getForeignFields().remove(field);
+						drawExistingFields(instance, main, foreignFields);
+						MainController.getInstance().setChanged();
+					}
+				});
+				box.getChildren().addAll(localName, remoteName, remove);
+				main.getChildren().add(box);
+			}
+		}
+		if (!foreignFields.isEmpty()) {	
+			// allow adding of new field
+			TextField name = new TextField();
+			name.setPromptText("Field name");
+			ComboBox<String> foreignKey = new ComboBox<String>();
+			List<String> fields = new ArrayList<String>(foreignFields.keySet());
+			Collections.sort(fields);
+			foreignKey.getItems().addAll(fields);
+			
+			ComboBox<String> foreignField = new ComboBox<String>();
+			foreignField.disableProperty().bind(foreignKey.getSelectionModel().selectedItemProperty().isNull());
+			Button add = new Button("+");
+			HBox box = new HBox();
+			box.getChildren().addAll(name, foreignKey, foreignField, add);
+			box.setPadding(new Insets(10, 0, 0, 0));
+			main.getChildren().add(box);
+			HBox.setMargin(foreignKey, new Insets(0, 10, 0, 10));
+			HBox.setMargin(add, new Insets(0, 10, 0, 10));
+			
+			foreignKey.getSelectionModel().selectedItemProperty().addListener(new ChangeListener<String>() {
+				@Override
+				public void changed(ObservableValue<? extends String> arg0, String arg1, String arg2) {
+					foreignField.getItems().clear();
+					foreignField.getSelectionModel().clearSelection();
+					name.setPromptText(suggestFieldName(foreignKey.getSelectionModel().getSelectedItem(), foreignField.getSelectionModel().getSelectedItem()));
+					if (arg2 != null) {
+						List<String> fields = new ArrayList<String>(foreignFields.get(arg2));
+						Collections.sort(fields);
+						foreignField.getItems().addAll(fields);
+					}
+				}
+			});
+			
+			foreignField.getSelectionModel().selectedItemProperty().addListener(new ChangeListener<String>() {
+				@Override
+				public void changed(ObservableValue<? extends String> arg0, String arg1, String arg2) {
+					name.setPromptText(suggestFieldName(foreignKey.getSelectionModel().getSelectedItem(), foreignField.getSelectionModel().getSelectedItem()));
+				}
+			});
+			
+			add.disableProperty().bind(foreignField.getSelectionModel().selectedItemProperty().isNull());
+			
+			add.addEventHandler(ActionEvent.ANY, new EventHandler<ActionEvent>() {
+				@Override
+				public void handle(ActionEvent arg0) {
+					ForeignNameField field = new ForeignNameField();
+					if (name.getText().trim().isEmpty()) {
+						field.setLocalName(suggestFieldName(foreignKey.getSelectionModel().getSelectedItem(), foreignField.getSelectionModel().getSelectedItem()));
+					}
+					else {
+						field.setLocalName(NamingConvention.LOWER_CAMEL_CASE.apply(NamingConvention.UNDERSCORE.apply(name.getText())));
+					}
+					field.setForeignName(foreignKey.getSelectionModel().getSelectedItem() + ":" + foreignField.getSelectionModel().getSelectedItem());
+					if (instance.getConfig().getForeignFields() == null) {
+						instance.getConfig().setForeignFields(new ArrayList<ForeignNameField>());
+					}
+					instance.getConfig().getForeignFields().add(field);
+					drawExistingFields(instance, main, foreignFields);
+					MainController.getInstance().setChanged();
+				}
+			});
+		}
+	}
+	
+	private String suggestFieldName(String key, String field) {
+		if (key.endsWith("Id")) {
+			key = key.substring(0, key.length() - 2);
+		}
+		if (field != null) {
+			key += field.substring(0, 1).toUpperCase() + field.substring(1);
+		}
+		return key;
 	}
 	
 	private void populateChecklist(CRUDArtifact instance, Pane pane, List<String> list, List<String> toIgnore, boolean respectProviderBlacklist) {
 		VBox checkboxes = new VBox();
-		for (String field : fields(instance)) {
+		for (String field : fields(instance, false)) {
 			if (toIgnore.indexOf(field) >= 0) {
 				continue;
 			}
@@ -421,19 +574,27 @@ public class CRUDArtifactGUIManager extends BaseJAXBGUIManager<CRUDConfiguration
 		pane.getChildren().add(checkboxes);
 	}
 	
-	private List<String> fields(CRUDArtifact instance) {
+	private List<String> fields(CRUDArtifact instance, boolean includeForeignFields) {
 		List<String> list = new ArrayList<String>();
 		for (Element<?> child : TypeUtils.getAllChildren((ComplexType) instance.getConfig().getCoreType())) {
 			if (child.getType() instanceof SimpleType) {
 				list.add(child.getName());
 			}
 		}
+		if (includeForeignFields && instance.getConfig().getForeignFields() != null) {
+			for (ForeignNameField foreign : instance.getConfig().getForeignFields()) {
+				if (foreign.getLocalName() != null) {
+					list.add(foreign.getLocalName());
+				}
+			}
+		}
 		Collections.sort(list);
 		return list;
 	}
-	private ComboBox<String> newFieldCombo(CRUDArtifact instance) {
+	
+	private ComboBox<String> newFieldCombo(CRUDArtifact instance, boolean includeForeignFields) {
 		ComboBox<String> fields = new ComboBox<String>();
-		fields.getItems().addAll(fields(instance));
+		fields.getItems().addAll(fields(instance, includeForeignFields));
 		fields.getItems().add(0, null);
 		return fields;
 	}

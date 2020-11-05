@@ -15,6 +15,24 @@ import be.nabu.libs.types.api.DefinedType;
 
 @XmlRootElement(name = "crud")
 public class CRUDConfiguration {
+	
+	public static class ForeignNameField {
+		private String foreignName;
+		private String localName;
+		public String getForeignName() {
+			return foreignName;
+		}
+		public void setForeignName(String foreignName) {
+			this.foreignName = foreignName;
+		}
+		public String getLocalName() {
+			return localName;
+		}
+		public void setLocalName(String localName) {
+			this.localName = localName;
+		}
+	}
+	
 	// the data type we are wrapping around
 	private DefinedType coreType;
 	
@@ -24,6 +42,8 @@ public class CRUDConfiguration {
 	
 	// the fields we want to blacklist for creation and/or updates
 	private List<String> createBlacklistFields, updateBlacklistFields, listBlacklistFields, updateRegenerateFields;
+	
+	private List<ForeignNameField> foreignFields;
 	
 	// the field we want to use to check security context
 	private String securityContextField;
@@ -164,6 +184,13 @@ public class CRUDConfiguration {
 	}
 	public void setConnection(DataSourceProviderArtifact connection) {
 		this.connection = connection;
+	}
+	
+	public List<ForeignNameField> getForeignFields() {
+		return foreignFields;
+	}
+	public void setForeignFields(List<ForeignNameField> foreignFields) {
+		this.foreignFields = foreignFields;
 	}
 	
 }

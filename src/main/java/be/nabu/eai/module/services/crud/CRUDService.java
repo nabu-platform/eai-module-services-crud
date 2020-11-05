@@ -50,6 +50,7 @@ import be.nabu.libs.types.structure.DefinedStructure;
 import be.nabu.libs.types.structure.Structure;
 
 // TODO: allow orderby configuration
+// TODO: allow for fields to be filled in on creation (e.g. the optional verified dateTime in a component)
 // TODO: allow "soft" delete -> mark a field for soft deletion, always take it into effect when selecting and use it to perform a soft delete
 // to support cms nodes -> a) "managed" fields, the provider is extended with a "managed" fields option where you can add fields that will be automatically managed
 //		-> maybe include an extension requirement in this? basically we say you have to extend a certain document, we list fields from there
@@ -267,7 +268,9 @@ public class CRUDService implements DefinedService, WebFragment, RESTFragment, A
 					break;
 					case LIST:
 						serviceInput = artifact.getConfig().getProvider().getConfig().getListService().getServiceInterface().getInputDefinition().newInstance();
-						serviceInput.set("typeId", artifact.getConfig().getCoreType().getId());
+//						serviceInput.set("typeId", artifact.getConfig().getCoreType().getId());
+						// we want to use the extended output (with necessary restrictions but also foreign key extensions) to be used as basis for the select
+						serviceInput.set("typeId", singleOutput.getId());
 						serviceInput.set("connectionId", connectionId);
 						serviceInput.set("transactionId", transactionId);
 						if (artifact.getConfig().isUseLanguage()) {
@@ -320,6 +323,13 @@ public class CRUDService implements DefinedService, WebFragment, RESTFragment, A
 										}
 										newFilter.setValues(wildCardValues);
 										values = wildCardValues;
+									}
+									
+									// if we have a boolean operator which is set as input and we _don't_ have input, we explicitly set the value false
+									// this causes it to be filtered out when we send it to "selectFiltered". no values would allow it to pass
+									// we want the boolean to be "false" by default
+									if (values.isEmpty() && ("is null".equals(filter.getOperator()) || "is not null".equals(filter.getOperator()))) {
+										values.add(false);
 									}
 								}
 								// if it is not an input, or actual input was provided, do it
@@ -418,6 +428,9 @@ public class CRUDService implements DefinedService, WebFragment, RESTFragment, A
 					}
 				break;
 				case LIST:
+					// we don't add the "contextId" as input explicitly
+					// you can choose via the filters whether you want to add it or not
+					// if you set a security context _and_ add the context as a filter, it will be properly exposed (also through REST)
 					if (artifact.getConfig().isUseLanguage()) {
 						input.add(new SimpleElementImpl<String>("language", SimpleTypeWrapperFactory.getInstance().getWrapper().wrap(String.class), input, new ValueImpl<Integer>(MinOccursProperty.getInstance(), 0)));
 					}
@@ -430,12 +443,28 @@ public class CRUDService implements DefinedService, WebFragment, RESTFragment, A
 						for (CRUDFilter filter : artifact.getConfig().getFilters()) {
 							if (filter.isInput()) {
 								Element<?> element = ((ComplexType) artifact.getConfig().getCoreType()).get(filter.getKey());
+								// if the element does not exist in the core type, it may have been added via foreign fields
+								if (element == null) {
+									element = singleOutput.get(filter.getKey());
+								}
 								// old filters might still have outdated values
 								if (element != null) {
-									SimpleElementImpl childElement = new SimpleElementImpl(filter.getAlias() == null ? filter.getKey() : filter.getAlias(), (SimpleType<?>) element.getType(), filters, new ValueImpl<Integer>(MinOccursProperty.getInstance(), 0));
+									// in most cases, the input type is the same as the element type _except_ when we are doing "is null" or "is not null" checks
+									// in such scenarios, the resulting input field (if it is indeed marked as an input) is a boolean indicating whether or not you want the additional query to be active
+									SimpleElementImpl childElement;
+									// TODO: in the future maybe every other "new operator" is also considered to be an "is" check, like if you manually type "> current_timestamp"
+									if ("is null".equals(filter.getOperator()) || "is not null".equals(filter.getOperator())) {
+										childElement = new SimpleElementImpl(filter.getAlias() == null ? filter.getKey() : filter.getAlias(), (SimpleType<Boolean>) SimpleTypeWrapperFactory.getInstance().getWrapper().wrap(Boolean.class), filters, new ValueImpl<Integer>(MinOccursProperty.getInstance(), 0));	
+									}
+									else {
+										childElement = new SimpleElementImpl(filter.getAlias() == null ? filter.getKey() : filter.getAlias(), (SimpleType<?>) element.getType(), filters, new ValueImpl<Integer>(MinOccursProperty.getInstance(), 0));
+									}
 									// only for some filters do we support the list entries
 									if ("=".equals(filter.getOperator()) || "<>".equals(filter.getOperator())) {
-										childElement.setProperty(new ValueImpl<Integer>(MaxOccursProperty.getInstance(), 0));
+										// for boolean data types a list also makes little sense
+										if (!Boolean.class.isAssignableFrom(((SimpleType<?>) childElement.getType()).getInstanceClass())) {
+											childElement.setProperty(new ValueImpl<Integer>(MaxOccursProperty.getInstance(), 0));
+										}
 									}
 									filters.add(childElement);
 								}
