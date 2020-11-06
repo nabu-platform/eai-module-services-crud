@@ -1,6 +1,7 @@
 package be.nabu.eai.module.services.crud;
 
 import java.io.IOException;
+import java.net.URL;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -11,6 +12,7 @@ import java.util.Map;
 
 import be.nabu.eai.api.NamingConvention;
 import be.nabu.eai.developer.MainController;
+import be.nabu.eai.developer.impl.CustomTooltip;
 import be.nabu.eai.developer.managers.base.BaseJAXBGUIManager;
 import be.nabu.eai.developer.managers.util.SimpleProperty;
 import be.nabu.eai.module.services.crud.CRUDConfiguration.ForeignNameField;
@@ -51,6 +53,13 @@ import javafx.scene.layout.VBox;
 // for list, we could allow configuring a custom jdbc service? if relations get too complex, it might be necessary?
 public class CRUDArtifactGUIManager extends BaseJAXBGUIManager<CRUDConfiguration, CRUDArtifact> {
 
+	static {
+		URL resource = CRUDArtifactGUIManager.class.getClassLoader().getResource("crud.css");
+		if (resource != null) {
+			MainController.registerStyleSheet(resource.toExternalForm());
+		}
+	}
+	
 	public CRUDArtifactGUIManager() {
 		super("CRUD", CRUDArtifact.class, new CRUDArtifactManager(), CRUDConfiguration.class);
 	}
@@ -247,6 +256,16 @@ public class CRUDArtifactGUIManager extends BaseJAXBGUIManager<CRUDConfiguration
 		maximize(main);
 	}
 	
+	private boolean operatorIsInput(String operator) {
+		// without an operator, we assume it is an input
+		if (operator == null) {
+			return true;
+		}
+		else {
+			return CRUDService.inputOperators.contains(operator);
+		}
+	}
+	
 	private void populateList(CRUDArtifact instance, Pane list) {
 		VBox main = new VBox();
 		main.setPadding(new Insets(10));
@@ -256,6 +275,7 @@ public class CRUDArtifactGUIManager extends BaseJAXBGUIManager<CRUDConfiguration
 			instance.getConfig().setFilters(new ArrayList<CRUDFilter>());
 		}
 		Label label = new Label("Filters");
+		label.getStyleClass().add("section-title");
 		VBox.setMargin(label, new Insets(10, 0, 10, 10));
 		main.getChildren().add(label);
 		
@@ -297,19 +317,41 @@ public class CRUDArtifactGUIManager extends BaseJAXBGUIManager<CRUDConfiguration
 					MainController.getInstance().setChanged();
 				}
 			});
+			CheckBox input = new CheckBox();
+			if (operatorIsInput(filter.getOperator())) {
+				input.setDisable(true);
+				filter.setInput(true);
+				input.setVisible(false);
+				input.setManaged(false);
+			}
+			
 			ComboBox<String> operator = new ComboBox<String>();
 			HBox.setHgrow(operator, Priority.ALWAYS);
 			operator.setEditable(true);
 			operator.setValue(filter.getOperator());
-			operator.getItems().addAll("=", "<>", ">", "<", ">=", "<=", "is null", "is not null", "like", "ilike");
+			operator.getItems().addAll(CRUDService.operators);
 			operator.valueProperty().addListener(new ChangeListener<String>() {
 				@Override
 				public void changed(ObservableValue<? extends String> arg0, String arg1, String arg2) {
 					filter.setOperator(arg2 == null || arg2.trim().isEmpty() ? null : arg2);
+					if (operatorIsInput(filter.getOperator())) {
+						input.setDisable(true);
+						filter.setInput(true);
+						input.setSelected(true);
+						input.setVisible(false);
+						input.setManaged(false);
+					}
+					// if we switched away from an input operator, unset all
+					else if (input.isDisabled()) {
+						input.setDisable(false);
+						filter.setInput(false);
+						input.setSelected(false);
+						input.setVisible(true);
+						input.setManaged(true);
+					}
 					MainController.getInstance().setChanged();
 				}
 			});
-			CheckBox input = new CheckBox("Is this filter an input?");
 			input.setSelected(filter.isInput());
 			input.selectedProperty().addListener(new ChangeListener<Boolean>() {
 				@Override
@@ -318,8 +360,11 @@ public class CRUDArtifactGUIManager extends BaseJAXBGUIManager<CRUDConfiguration
 					MainController.getInstance().setChanged();
 				}
 			});
+			new CustomTooltip("Do you want to allow users to turn this filter on and off?").install(input);
+			
 			HBox buttons = new HBox();
-			Button remove = new Button("Remove");
+			Button remove = new Button();
+			remove.setGraphic(MainController.loadFixedSizeGraphic("icons/delete.png", 12));
 			remove.addEventHandler(ActionEvent.ANY, new EventHandler<ActionEvent>() {
 				@Override
 				public void handle(ActionEvent arg0) {
@@ -331,7 +376,7 @@ public class CRUDArtifactGUIManager extends BaseJAXBGUIManager<CRUDConfiguration
 				}
 			});
 			Button up = new Button();
-			up.setGraphic(MainController.loadGraphic("move/up.png"));
+			up.setGraphic(MainController.loadFixedSizeGraphic("move/up.png", 12));
 			up.addEventHandler(ActionEvent.ANY, new EventHandler<ActionEvent>() {
 				@Override
 				public void handle(ActionEvent arg0) {
@@ -348,7 +393,7 @@ public class CRUDArtifactGUIManager extends BaseJAXBGUIManager<CRUDConfiguration
 			});
 			
 			Button down = new Button();
-			down.setGraphic(MainController.loadGraphic("move/down.png"));
+			down.setGraphic(MainController.loadFixedSizeGraphic("move/down.png", 12));
 			down.addEventHandler(ActionEvent.ANY, new EventHandler<ActionEvent>() {
 				@Override
 				public void handle(ActionEvent arg0) {
@@ -371,12 +416,13 @@ public class CRUDArtifactGUIManager extends BaseJAXBGUIManager<CRUDConfiguration
 			HBox.setMargin(operator, new Insets(10));
 			HBox.setMargin(input, new Insets(10));
 			HBox.setMargin(buttons, new Insets(10));
-			filterBox.getChildren().addAll(mainOperator, alias, field, operator, input, buttons);
+			filterBox.getChildren().addAll(mainOperator, alias, field, operator, buttons, input);
 			main.getChildren().addAll(filterBox);
 		}
 		
 		// have a button to add a filter
-		Button add = new Button("Add Filter");
+		Button add = new Button("Filter");
+		add.setGraphic(MainController.loadFixedSizeGraphic("icons/add.png", 12));
 		add.addEventHandler(ActionEvent.ANY, new EventHandler<ActionEvent>() {
 			@Override
 			public void handle(ActionEvent arg0) {

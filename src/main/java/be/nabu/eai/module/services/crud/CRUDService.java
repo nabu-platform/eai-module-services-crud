@@ -58,6 +58,9 @@ import be.nabu.libs.types.structure.Structure;
 // -> for example for CMS nodes you can configure the groups/roles etc
 public class CRUDService implements DefinedService, WebFragment, RESTFragment, ArtifactWithExceptions {
 
+	public static List<String> inputOperators = Arrays.asList("=", "<>", ">", "<", ">=", "<=", "like", "ilike");
+	public static List<String> operators = Arrays.asList("=", "<>", ">", "<", ">=", "<=", "is null", "is not null", "like", "ilike");
+	
 	private String id;
 	private CRUDType type;
 	private Structure input, output;
@@ -452,8 +455,8 @@ public class CRUDService implements DefinedService, WebFragment, RESTFragment, A
 									// in most cases, the input type is the same as the element type _except_ when we are doing "is null" or "is not null" checks
 									// in such scenarios, the resulting input field (if it is indeed marked as an input) is a boolean indicating whether or not you want the additional query to be active
 									SimpleElementImpl childElement;
-									// TODO: in the future maybe every other "new operator" is also considered to be an "is" check, like if you manually type "> current_timestamp"
-									if ("is null".equals(filter.getOperator()) || "is not null".equals(filter.getOperator())) {
+									// every other "new operator" that you typed is also considered to be an "is" check, like if you manually type "> current_timestamp"
+									if ("is null".equals(filter.getOperator()) || "is not null".equals(filter.getOperator()) || !operators.contains(filter.getOperator())) {
 										childElement = new SimpleElementImpl(filter.getAlias() == null ? filter.getKey() : filter.getAlias(), (SimpleType<Boolean>) SimpleTypeWrapperFactory.getInstance().getWrapper().wrap(Boolean.class), filters, new ValueImpl<Integer>(MinOccursProperty.getInstance(), 0));	
 									}
 									else {
