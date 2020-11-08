@@ -48,6 +48,7 @@ import javafx.scene.layout.AnchorPane;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.Pane;
 import javafx.scene.layout.Priority;
+import javafx.scene.layout.TilePane;
 import javafx.scene.layout.VBox;
 
 // for list, we could allow configuring a custom jdbc service? if relations get too complex, it might be necessary?
@@ -108,15 +109,14 @@ public class CRUDArtifactGUIManager extends BaseJAXBGUIManager<CRUDConfiguration
 	
 		Accordion accordion = new Accordion();
 		
-		AnchorPane generalPane = new AnchorPane();
 		VBox box = new VBox();
+		box.setFillWidth(true);
 		showProperties(instance, box, false);
 		populateGeneral(instance, box);
-		generalPane.getChildren().add(box);
-		generalPane.getStyleClass().add("configuration-pane");
-		generalPane.getStyleClass().add("configuration-pane-basic");
+		box.getStyleClass().add("configuration-pane");
+		box.getStyleClass().add("configuration-pane-basic");
 		// the default settings should be good enough?
-		TitledPane general = new TitledPane("Advanced", generalPane);
+		TitledPane general = new TitledPane("Advanced", box);
 		
 		AnchorPane listPane = new AnchorPane();
 		populateList(instance, listPane);
@@ -156,6 +156,7 @@ public class CRUDArtifactGUIManager extends BaseJAXBGUIManager<CRUDConfiguration
 	
 	private void populateGeneral(CRUDArtifact instance, Pane general) {
 		VBox main = new VBox();
+		main.setFillWidth(true);
 		
 		// select the security context field
 		ComboBox<String> securityContextField = newFieldCombo(instance, false);
@@ -168,6 +169,8 @@ public class CRUDArtifactGUIManager extends BaseJAXBGUIManager<CRUDConfiguration
 			}
 		});
 		HBox securityField = createField(securityContextField, "Security Context Field", "Configure the security context field for this type.");
+		HBox.setMargin(securityContextField, new Insets(0, 0, 0, 7));
+		HBox.setHgrow(securityContextField, Priority.ALWAYS);
 		main.getChildren().add(securityField);
 		
 		// list and create have security field of parent
@@ -274,15 +277,25 @@ public class CRUDArtifactGUIManager extends BaseJAXBGUIManager<CRUDConfiguration
 		if (instance.getConfig().getFilters() == null) {
 			instance.getConfig().setFilters(new ArrayList<CRUDFilter>());
 		}
+		
+		VBox filters = new VBox();
+		main.getChildren().add(filters);
+		filters.getStyleClass().addAll("section", "block");
 		Label label = new Label("Filters");
-		label.getStyleClass().add("section-title");
-		VBox.setMargin(label, new Insets(10, 0, 10, 10));
-		main.getChildren().add(label);
+		label.getStyleClass().addAll("section-title", "h1");
+		filters.getChildren().add(label);
+		
+		Label nodata = new Label("You have not yet added any filters. Click the add filter button below to get started.");
+		nodata.getStyleClass().add("p");
+		if (instance.getConfig().getFilters() == null || instance.getConfig().getFilters().isEmpty()) {
+			filters.getChildren().add(nodata);
+		}
 		
 		// if you want to hardcode values, add it to the operator (for now)
 		// first we define the filters
 		for (CRUDFilter filter : instance.getConfig().getFilters()) {
 			HBox filterBox = new HBox();
+			filterBox.setAlignment(Pos.CENTER_LEFT);
 			ComboBox<String> mainOperator = new ComboBox<String>();
 			mainOperator.getItems().addAll("and", "or");
 			if (filter.isOr()) {
@@ -417,7 +430,7 @@ public class CRUDArtifactGUIManager extends BaseJAXBGUIManager<CRUDConfiguration
 			HBox.setMargin(input, new Insets(10));
 			HBox.setMargin(buttons, new Insets(10));
 			filterBox.getChildren().addAll(mainOperator, alias, field, operator, buttons, input);
-			main.getChildren().addAll(filterBox);
+			filters.getChildren().addAll(filterBox);
 		}
 		
 		// have a button to add a filter
@@ -433,18 +446,33 @@ public class CRUDArtifactGUIManager extends BaseJAXBGUIManager<CRUDConfiguration
 				MainController.getInstance().setChanged();
 			}
 		});
-		VBox.setMargin(add, new Insets(10, 0, 10, 0));
-		main.getChildren().add(add);
+		HBox buttons = new HBox();
+		buttons.getStyleClass().add("buttons");
+		buttons.getChildren().add(add);
+		filters.getChildren().add(buttons);
+
+		VBox fields = new VBox();
+		fields.getStyleClass().addAll("section");
+		main.getChildren().add(fields);
+		label = new Label("Fields");
+		label.getStyleClass().add("h1");
+		fields.getChildren().add(label);
 		
 		// then checkboxes to choose the fields you want to blacklist
 		label = new Label("Choose the fields you want to blacklist from the resultset:");
-		VBox.setMargin(label, new Insets(10, 0, 10, 0));
-		main.getChildren().add(label);
+		label.getStyleClass().add("p");
+		fields.getChildren().add(label);
 		if (instance.getConfig().getListBlacklistFields() == null) {
 			instance.getConfig().setListBlacklistFields(new ArrayList<String>());
 		}
-		populateChecklist(instance, main, instance.getConfig().getListBlacklistFields(), new ArrayList<String>(), false);
-		drawForeignNameFields(instance, main);
+		populateChecklist(instance, fields, instance.getConfig().getListBlacklistFields(), new ArrayList<String>(), false);
+		
+		VBox foreign = new VBox();
+		foreign.getStyleClass().add("section");
+		drawForeignNameFields(instance, foreign);
+		if (!foreign.getChildren().isEmpty()) {
+			main.getChildren().add(foreign);
+		}
 	}
 	
 	// currently we are limited to selecting from the table itself, not yet parent tables etc
@@ -471,12 +499,12 @@ public class CRUDArtifactGUIManager extends BaseJAXBGUIManager<CRUDConfiguration
 	private void drawForeignNameFields(CRUDArtifact instance, VBox main) {
 		Map<String, List<String>> foreignFields = getForeignFields(instance);
 		if (!foreignFields.isEmpty()) {
-			Separator separator = new Separator(Orientation.HORIZONTAL);
-			main.getChildren().add(separator);
-			VBox.setMargin(separator, new Insets(20, 0, 10, 0));
+			Label foreign = new Label("Import Fields");
+			foreign.getStyleClass().add("h1");
+			main.getChildren().add(foreign);
 			// if we have any foreign keys, we can use that to add foreign fields
 			Label label = new Label("Add fields from referenced tables:");
-			VBox.setMargin(label, new Insets(10, 0, 10, 0));
+			label.getStyleClass().add("p");
 			main.getChildren().add(label);
 			
 			VBox vbox = new VBox();
@@ -491,6 +519,7 @@ public class CRUDArtifactGUIManager extends BaseJAXBGUIManager<CRUDConfiguration
 		if (instance.getConfig().getForeignFields() != null) {
 			for (ForeignNameField field : instance.getConfig().getForeignFields()) {
 				HBox box = new HBox();
+				box.setAlignment(Pos.CENTER_LEFT);
 				Label localName = new Label(field.getLocalName());
 				localName.setPadding(new Insets(5));
 				localName.getStyleClass().add("crud-field-name");
@@ -499,8 +528,8 @@ public class CRUDArtifactGUIManager extends BaseJAXBGUIManager<CRUDConfiguration
 				remoteName.setPadding(new Insets(5));
 				remoteName.getStyleClass().add("crud-foreign-name");
 				
-				Label remove = new Label("x");
-				remove.setPadding(new Insets(10));
+				Button remove = new Button();
+				remove.setGraphic(MainController.loadFixedSizeGraphic("icons/delete.png", 12));
 				remove.getStyleClass().add("crud-remove");
 				
 				// remove a field
@@ -512,7 +541,7 @@ public class CRUDArtifactGUIManager extends BaseJAXBGUIManager<CRUDConfiguration
 						MainController.getInstance().setChanged();
 					}
 				});
-				box.getChildren().addAll(localName, remoteName, remove);
+				box.getChildren().addAll(remove, localName, remoteName);
 				main.getChildren().add(box);
 			}
 		}
@@ -527,8 +556,10 @@ public class CRUDArtifactGUIManager extends BaseJAXBGUIManager<CRUDConfiguration
 			
 			ComboBox<String> foreignField = new ComboBox<String>();
 			foreignField.disableProperty().bind(foreignKey.getSelectionModel().selectedItemProperty().isNull());
-			Button add = new Button("+");
+			Button add = new Button();
+			add.setGraphic(MainController.loadFixedSizeGraphic("icons/add.png", 12));
 			HBox box = new HBox();
+			box.setAlignment(Pos.CENTER_LEFT);
 			box.getChildren().addAll(name, foreignKey, foreignField, add);
 			box.setPadding(new Insets(10, 0, 0, 0));
 			main.getChildren().add(box);
@@ -591,7 +622,13 @@ public class CRUDArtifactGUIManager extends BaseJAXBGUIManager<CRUDConfiguration
 	}
 	
 	private void populateChecklist(CRUDArtifact instance, Pane pane, List<String> list, List<String> toIgnore, boolean respectProviderBlacklist) {
-		VBox checkboxes = new VBox();
+		TilePane checkboxes = new TilePane();
+		checkboxes.setOrientation(Orientation.VERTICAL);
+		// the rows/columns
+		checkboxes.setAlignment(Pos.TOP_LEFT);
+		// the content within
+		checkboxes.setTileAlignment(Pos.CENTER_LEFT);
+		checkboxes.setPrefRows(5);
 		for (String field : fields(instance, false)) {
 			if (toIgnore.indexOf(field) >= 0) {
 				continue;
@@ -615,8 +652,11 @@ public class CRUDArtifactGUIManager extends BaseJAXBGUIManager<CRUDConfiguration
 					MainController.getInstance().setChanged();
 				}
 			});
+			TilePane.setMargin(box, new Insets(3, 20, 0, 0));
 			checkboxes.getChildren().add(box);
 		}
+		// we want approximitely 4 columns (max) with at least 5 per column
+		checkboxes.setPrefRows((int) Math.max(5, Math.ceil(checkboxes.getChildren().size() / 4)));
 		pane.getChildren().add(checkboxes);
 	}
 	
