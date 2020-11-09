@@ -70,6 +70,8 @@ public class CRUDService implements DefinedService, WebFragment, RESTFragment, A
 	private CRUDArtifact artifact;
 	private DefinedStructure updateIntermediaryInput;
 	private DefinedStructure singleOutput;
+	private DefinedStructure createOutput;
+	private DefinedStructure updateOutput;
 	
 	public enum CRUDType {
 		CREATE,
@@ -79,7 +81,7 @@ public class CRUDService implements DefinedService, WebFragment, RESTFragment, A
 		GET
 	}
 
-	public CRUDService(CRUDArtifact artifact, String id, CRUDType type, DefinedStructure createInput, DefinedStructure updateInput, DefinedStructure outputList, DefinedStructure updateIntermediaryInput, DefinedStructure singleOutput) {
+	public CRUDService(CRUDArtifact artifact, String id, CRUDType type, DefinedStructure createInput, DefinedStructure updateInput, DefinedStructure outputList, DefinedStructure updateIntermediaryInput, DefinedStructure singleOutput, DefinedStructure createOutput, DefinedStructure updateOutput) {
 		this.artifact = artifact;
 		this.id = id;
 		this.type = type;
@@ -88,6 +90,8 @@ public class CRUDService implements DefinedService, WebFragment, RESTFragment, A
 		this.outputList = outputList;
 		this.updateIntermediaryInput = updateIntermediaryInput;
 		this.singleOutput = singleOutput;
+		this.createOutput = createOutput;
+		this.updateOutput = updateOutput;
 	}
 	
 	@Override
@@ -187,7 +191,7 @@ public class CRUDService implements DefinedService, WebFragment, RESTFragment, A
 						serviceInput.set("typeId", artifact.getConfig().getCoreType().getId());
 						serviceInput.set("changeTracker", artifact.getConfig().getChangeTracker() == null ? null : artifact.getConfig().getChangeTracker().getId());
 						
-						output.set("created", createInstance);
+						output.set("created", new MaskedContent(createInstance, createOutput));
 					break;
 					case UPDATE:
 						object = input == null ? null : input.get("instance");
@@ -229,7 +233,7 @@ public class CRUDService implements DefinedService, WebFragment, RESTFragment, A
 						}
 						serviceInput.set("changeTracker", artifact.getConfig().getChangeTracker() == null ? null : artifact.getConfig().getChangeTracker().getId());
 						
-						output.set("updated", updateInstance);
+						output.set("updated", new MaskedContent(updateInstance, updateOutput));
 					break;
 					case DELETE:
 						serviceInput = artifact.getConfig().getProvider().getConfig().getDeleteService().getServiceInterface().getInputDefinition().newInstance();
@@ -507,10 +511,10 @@ public class CRUDService implements DefinedService, WebFragment, RESTFragment, A
 			
 			switch(type) {
 				case CREATE:
-					output.add(new ComplexElementImpl("created", (ComplexType) artifact.getConfig().getCoreType(), output));
+					output.add(new ComplexElementImpl("created", createOutput, output));
 				break;
 				case UPDATE:
-					output.add(new ComplexElementImpl("updated", updateIntermediaryInput, output));
+					output.add(new ComplexElementImpl("updated", updateOutput, output));
 				break;
 				case LIST:
 					output.setSuperType(outputList);
@@ -748,6 +752,8 @@ public class CRUDService implements DefinedService, WebFragment, RESTFragment, A
 		switch (type) {
 			case LIST: return outputList;
 			case GET: return singleOutput;
+			case CREATE: return createOutput;
+			case UPDATE: return updateOutput;
 			default: return null;
 		}
 	}

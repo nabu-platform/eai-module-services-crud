@@ -59,7 +59,7 @@ public class CRUDArtifactManager extends JAXBArtifactManager<CRUDConfiguration, 
 		// create the types
 		if (artifact.getConfig().getCoreType() != null) {
 			ModifiableEntry types = EAIRepositoryUtils.getParent(parent, "types", true);
-			DefinedStructure createInput = null, updateInput = null, outputList = null, updateIntermediaryInput = null;
+			DefinedStructure createInput = null, updateInput = null, outputList = null, updateIntermediaryInput = null, createOutput = null, updateOutput = null;
 			// if we have a provider with a create, add it
 			List<String> primary = getPrimary((ComplexType) artifact.getConfig().getCoreType());
 			if (artifact.getConfig().getProvider() != null && artifact.getConfig().getProvider().getConfig().getCreateService() != null) {
@@ -69,13 +69,18 @@ public class CRUDArtifactManager extends JAXBArtifactManager<CRUDConfiguration, 
 				if (provider != null && provider.getConfig().getBlacklistedFields() != null) {
 					blacklist.addAll(provider.getConfig().getBlacklistedFields());
 				}
+				createOutput = addChild(artifact, entries, types, "createOutput", artifact.getConfig().getCoreType(), new ArrayList<String>(blacklist));
+				synchronize(createOutput, (ComplexType) artifact.getConfig().getCoreType());
+				
+				// we don't need to blacklist again as we will build upon the output
+				blacklist.clear();
 				blacklist.addAll(primary);
 				blacklist.addAll(getGenerated((ComplexType) artifact.getConfig().getCoreType()));
 				if (artifact.getConfig().getSecurityContextField() != null) {
 					blacklist.add(artifact.getConfig().getSecurityContextField());
 				}
 				// generate the input
-				createInput = addChild(artifact, entries, types, "createInput", artifact.getConfig().getCoreType(), blacklist);
+				createInput = addChild(artifact, entries, types, "createInput", createOutput, blacklist);
 				synchronize(createInput, (ComplexType) artifact.getConfig().getCoreType());
 			}
 			// if we have a provider with a create, add it
@@ -87,6 +92,7 @@ public class CRUDArtifactManager extends JAXBArtifactManager<CRUDConfiguration, 
 				if (provider != null && provider.getConfig().getBlacklistedFields() != null) {
 					blacklist.addAll(provider.getConfig().getBlacklistedFields());
 				}
+				// do allow all the fields we want to update
 				if (artifact.getConfig().getUpdateRegenerateFields() != null) {
 					blacklist.removeAll(artifact.getConfig().getUpdateRegenerateFields());
 				}
@@ -99,16 +105,20 @@ public class CRUDArtifactManager extends JAXBArtifactManager<CRUDConfiguration, 
 				
 				// we don't need to blacklist again as we will build upon the intermediary
 				blacklist.clear();
-				blacklist.addAll(primary);
-				if (artifact.getConfig().getUpdateRegenerateFields() != null) {
-					blacklist.addAll(artifact.getConfig().getUpdateRegenerateFields());
+				// make sure if we blacklisted a field that should be regenerated, it is blacklisted again for the output
+				if (provider != null && provider.getConfig().getBlacklistedFields() != null) {
+					blacklist.addAll(provider.getConfig().getBlacklistedFields());
 				}
-				// add the fields we should regenerate (if any)
+				updateOutput = addChild(artifact, entries, types, "updateOutput", updateIntermediaryInput, new ArrayList<String>(blacklist));
+				
+				blacklist.clear();
+				blacklist.addAll(primary);
+				// blacklist the fields we regenerate
 				if (artifact.getConfig().getUpdateRegenerateFields() != null) {
 					blacklist.addAll(artifact.getConfig().getUpdateRegenerateFields());
 				}
 				// generate the input
-				updateInput = addChild(artifact, entries, types, "updateInput", updateIntermediaryInput, blacklist);
+				updateInput = addChild(artifact, entries, types, "updateInput", updateOutput, blacklist);
 				synchronize(updateInput, (ComplexType) artifact.getConfig().getCoreType());
 			}
 			DefinedStructure output = null;
@@ -161,19 +171,19 @@ public class CRUDArtifactManager extends JAXBArtifactManager<CRUDConfiguration, 
 			// note that we can only add update services & list services if we have a primary key
 			ModifiableEntry services = EAIRepositoryUtils.getParent(parent, "services", true);
 			if (artifact.getConfig().getProvider() != null && artifact.getConfig().getProvider().getConfig().getCreateService() != null) {
-				addChild(artifact, entries, services, "create", new CRUDService(artifact, services.getId() + ".create", CRUDType.CREATE, createInput, updateInput, outputList, updateIntermediaryInput, output));
+				addChild(artifact, entries, services, "create", new CRUDService(artifact, services.getId() + ".create", CRUDType.CREATE, createInput, updateInput, outputList, updateIntermediaryInput, output, createOutput, updateOutput));
 			}
 			if (!primary.isEmpty() && artifact.getConfig().getProvider() != null && artifact.getConfig().getProvider().getConfig().getUpdateService() != null) {
-				addChild(artifact, entries, services, "update", new CRUDService(artifact, services.getId() + ".update", CRUDType.UPDATE, createInput, updateInput, outputList, updateIntermediaryInput, output));
+				addChild(artifact, entries, services, "update", new CRUDService(artifact, services.getId() + ".update", CRUDType.UPDATE, createInput, updateInput, outputList, updateIntermediaryInput, output, createOutput, updateOutput));
 			}
 			if (artifact.getConfig().getProvider() != null && artifact.getConfig().getProvider().getConfig().getListService() != null) {
-				addChild(artifact, entries, services, "list", new CRUDService(artifact, services.getId() + ".list", CRUDType.LIST, createInput, updateInput, outputList, updateIntermediaryInput, output));
+				addChild(artifact, entries, services, "list", new CRUDService(artifact, services.getId() + ".list", CRUDType.LIST, createInput, updateInput, outputList, updateIntermediaryInput, output, createOutput, updateOutput));
 				if (!primary.isEmpty()) {
-					addChild(artifact, entries, services, "get", new CRUDService(artifact, services.getId() + ".get", CRUDType.GET, createInput, updateInput, outputList, updateIntermediaryInput, output));
+					addChild(artifact, entries, services, "get", new CRUDService(artifact, services.getId() + ".get", CRUDType.GET, createInput, updateInput, outputList, updateIntermediaryInput, output, createOutput, updateOutput));
 				}
 			}
 			if (!primary.isEmpty() && artifact.getConfig().getProvider() != null && artifact.getConfig().getProvider().getConfig().getDeleteService() != null) {
-				addChild(artifact, entries, services, "delete", new CRUDService(artifact, services.getId() + ".delete", CRUDType.DELETE, createInput, updateInput, outputList, updateIntermediaryInput, output));
+				addChild(artifact, entries, services, "delete", new CRUDService(artifact, services.getId() + ".delete", CRUDType.DELETE, createInput, updateInput, outputList, updateIntermediaryInput, output, createOutput, updateOutput));
 			}
 		}
 		return entries;
