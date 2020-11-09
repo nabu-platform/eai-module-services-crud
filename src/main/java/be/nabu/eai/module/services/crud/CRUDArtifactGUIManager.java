@@ -17,7 +17,9 @@ import be.nabu.eai.developer.managers.base.BaseJAXBGUIManager;
 import be.nabu.eai.developer.managers.util.SimpleProperty;
 import be.nabu.eai.module.services.crud.CRUDConfiguration.ForeignNameField;
 import be.nabu.eai.module.services.crud.provider.CRUDProviderArtifact;
+import be.nabu.eai.repository.api.Repository;
 import be.nabu.eai.repository.resources.RepositoryEntry;
+import be.nabu.libs.artifacts.api.Artifact;
 import be.nabu.libs.property.api.Property;
 import be.nabu.libs.property.api.Value;
 import be.nabu.libs.services.jdbc.JDBCUtils;
@@ -27,6 +29,8 @@ import be.nabu.libs.types.api.DefinedType;
 import be.nabu.libs.types.api.Element;
 import be.nabu.libs.types.api.SimpleType;
 import be.nabu.libs.types.properties.ForeignKeyProperty;
+import javafx.beans.property.SimpleStringProperty;
+import javafx.beans.property.StringProperty;
 import javafx.beans.value.ChangeListener;
 import javafx.beans.value.ObservableValue;
 import javafx.event.ActionEvent;
@@ -496,9 +500,29 @@ public class CRUDArtifactGUIManager extends BaseJAXBGUIManager<CRUDConfiguration
 		return fields;
 	}
 	
+	private Map<String, String> getForeignKeys(ComplexType type) {
+		Map<String, String> keys = new HashMap<String, String>();
+		// suppose your type extends another type (e.g. node) and you want to use a foreign key from that parent type, it "should" be possible. the expansion should get the correct binding
+		for (Element<?> element : TypeUtils.getAllChildren(type)) {
+			Value<String> property = element.getProperty(ForeignKeyProperty.getInstance());
+			if (property != null && property.getValue() != null) {
+				keys.put(element.getName(), property.getValue());
+			}
+		}
+		return keys;
+	}
+	private List<String> getChildren(ComplexType type) {
+		List<String> children = new ArrayList<String>();
+		for (Element<?> element : TypeUtils.getAllChildren(type)) {
+			children.add(element.getName());
+		}
+		return children;
+	}
+	
 	private void drawForeignNameFields(CRUDArtifact instance, VBox main) {
-		Map<String, List<String>> foreignFields = getForeignFields(instance);
-		if (!foreignFields.isEmpty()) {
+		Map<String, String> foreignKeys = getForeignKeys((ComplexType) instance.getConfig().getCoreType());
+		// you need at least some foreign keys in your current table to do this
+		if (!foreignKeys.isEmpty()) {
 			Label foreign = new Label("Import Fields");
 			foreign.getStyleClass().add("h1");
 			main.getChildren().add(foreign);
@@ -509,11 +533,11 @@ public class CRUDArtifactGUIManager extends BaseJAXBGUIManager<CRUDConfiguration
 			
 			VBox vbox = new VBox();
 			main.getChildren().add(vbox);
-			drawExistingFields(instance, vbox, foreignFields);
+			drawExistingFields(instance, vbox);
 		}
 	}
 	
-	private void drawExistingFields(CRUDArtifact instance, VBox main, Map<String, List<String>> foreignFields) {
+	private void drawExistingFields(CRUDArtifact instance, VBox main) {
 		main.getChildren().clear();
 		// we first render the already added keys
 		if (instance.getConfig().getForeignFields() != null) {
@@ -537,7 +561,7 @@ public class CRUDArtifactGUIManager extends BaseJAXBGUIManager<CRUDConfiguration
 					@Override
 					public void handle(MouseEvent arg0) {
 						instance.getConfig().getForeignFields().remove(field);
-						drawExistingFields(instance, main, foreignFields);
+						drawExistingFields(instance, main);
 						MainController.getInstance().setChanged();
 					}
 				});
@@ -545,67 +569,112 @@ public class CRUDArtifactGUIManager extends BaseJAXBGUIManager<CRUDConfiguration
 				main.getChildren().add(box);
 			}
 		}
-		if (!foreignFields.isEmpty()) {	
-			// allow adding of new field
-			TextField name = new TextField();
-			name.setPromptText("Field name");
-			ComboBox<String> foreignKey = new ComboBox<String>();
-			List<String> fields = new ArrayList<String>(foreignFields.keySet());
+		// allow adding of new field
+		TextField name = new TextField();
+		name.setPromptText("Field name");
+		
+		StringProperty foreignName = new SimpleStringProperty();
+		StringProperty fieldName = new SimpleStringProperty();
+		
+		name.promptTextProperty().bind(fieldName);
+		
+		HBox combo = new HBox();
+		drawCombo(instance.getRepository(), foreignName, fieldName, (ComplexType) instance.getConfig().getCoreType(), combo, true);
+		
+		Button add = new Button();
+		add.setGraphic(MainController.loadFixedSizeGraphic("icons/add.png", 12));
+		HBox box = new HBox();
+		box.setAlignment(Pos.CENTER_LEFT);
+		box.getChildren().addAll(name, combo, add);
+		box.setPadding(new Insets(10, 0, 0, 0));
+		main.getChildren().add(box);
+		HBox.setMargin(combo, new Insets(0, 10, 0, 10));
+		HBox.setMargin(add, new Insets(0, 10, 0, 10));
+		
+		add.disableProperty().bind(foreignName.isNull().or(foreignName.isEmpty()));
+		add.addEventHandler(ActionEvent.ANY, new EventHandler<ActionEvent>() {
+			@Override
+			public void handle(ActionEvent arg0) {
+				ForeignNameField field = new ForeignNameField();
+				if (name.getText().trim().isEmpty()) {
+					field.setLocalName(fieldName.get());
+				}
+				else {
+					field.setLocalName(NamingConvention.LOWER_CAMEL_CASE.apply(NamingConvention.UNDERSCORE.apply(name.getText())));
+				}
+				field.setForeignName(foreignName.get());
+				if (instance.getConfig().getForeignFields() == null) {
+					instance.getConfig().setForeignFields(new ArrayList<ForeignNameField>());
+				}
+				instance.getConfig().getForeignFields().add(field);
+				drawExistingFields(instance, main);
+				MainController.getInstance().setChanged();
+			}
+		});
+	}
+	
+	// the first combo box is from the current type and you _must_ choose a foreign
+	// every other combo box after that can contain any field
+	private void drawCombo(Repository repository, StringProperty field, StringProperty name, ComplexType type, HBox combos, boolean limitToForeign) {
+		List<String> children = getChildren(type);
+		Map<String, String> foreignKeys = getForeignKeys(type);
+		if ((limitToForeign && !foreignKeys.isEmpty()) || (!limitToForeign && !children.isEmpty())) {
+			// populate the combobox with foreign keys
+			ComboBox<String> box = new ComboBox<String>();
+			
+			List<String> fields = new ArrayList<String>(limitToForeign ? foreignKeys.keySet() : children);
 			Collections.sort(fields);
-			foreignKey.getItems().addAll(fields);
+			box.getItems().addAll(fields);
 			
-			ComboBox<String> foreignField = new ComboBox<String>();
-			foreignField.disableProperty().bind(foreignKey.getSelectionModel().selectedItemProperty().isNull());
-			Button add = new Button();
-			add.setGraphic(MainController.loadFixedSizeGraphic("icons/add.png", 12));
-			HBox box = new HBox();
-			box.setAlignment(Pos.CENTER_LEFT);
-			box.getChildren().addAll(name, foreignKey, foreignField, add);
-			box.setPadding(new Insets(10, 0, 0, 0));
-			main.getChildren().add(box);
-			HBox.setMargin(foreignKey, new Insets(0, 10, 0, 10));
-			HBox.setMargin(add, new Insets(0, 10, 0, 10));
-			
-			foreignKey.getSelectionModel().selectedItemProperty().addListener(new ChangeListener<String>() {
+			combos.getChildren().add(box);
+			box.getSelectionModel().selectedItemProperty().addListener(new ChangeListener<String>() {
 				@Override
 				public void changed(ObservableValue<? extends String> arg0, String arg1, String arg2) {
-					foreignField.getItems().clear();
-					foreignField.getSelectionModel().clearSelection();
-					name.setPromptText(suggestFieldName(foreignKey.getSelectionModel().getSelectedItem(), foreignField.getSelectionModel().getSelectedItem()));
+					// reset
+					field.set(null);
+					name.set(null);
+					// if we change the value of the combo box, clear anything we drew after this one
+					int indexOf = combos.getChildren().indexOf(box);
+					// don't remove this combo itself
+					if (indexOf < combos.getChildren().size() - 1) {
+						// some really odd behavior if you use the sublist to immediately removeAll, you get concurrent modification, we add it to a new list to circumvent this
+						List<Node> subList = new ArrayList<Node>(combos.getChildren().subList(indexOf + 1, combos.getChildren().size()));
+						combos.getChildren().removeAll(subList);
+					}
 					if (arg2 != null) {
-						List<String> fields = new ArrayList<String>(foreignFields.get(arg2));
-						Collections.sort(fields);
-						foreignField.getItems().addAll(fields);
+						// recombine the fields
+						StringBuilder foreignNameBuilder = new StringBuilder();
+						StringBuilder fieldNameBuilder = new StringBuilder();
+						for (Node child : combos.getChildren()) {
+							if (child instanceof ComboBox) {
+								if (!foreignNameBuilder.toString().isEmpty()) {
+									foreignNameBuilder.append(":");
+								}
+								String singleName = ((ComboBox<?>) child).getSelectionModel().getSelectedItem().toString();
+								// for the foreignName we need the full field name
+								foreignNameBuilder.append(singleName);
+								// for the suggested field name we do not!
+								if (singleName.endsWith("Id")) {
+									singleName = singleName.substring(0, singleName.length() - "Id".length());
+								}
+								if (!fieldNameBuilder.toString().isEmpty()) {
+									singleName = singleName.substring(0, 1).toUpperCase() + singleName.substring(1);
+								}
+								fieldNameBuilder.append(singleName);
+							}
+						}
+						field.set(foreignNameBuilder.toString());
+						name.set(fieldNameBuilder.toString());
+						// you selected another foreign key, optionally keep going (if you add at this point, you get the key field itself)
+						if (foreignKeys.containsKey(arg2)) {
+							String foreignKeyValue = foreignKeys.get(arg2);
+							String[] split = foreignKeyValue.split(":");
+							Artifact resolve = repository.resolve(split[0]);
+							if (resolve instanceof ComplexType) {
+								drawCombo(repository, field, name, (ComplexType) resolve, combos, false);
+							}
+						}
 					}
-				}
-			});
-			
-			foreignField.getSelectionModel().selectedItemProperty().addListener(new ChangeListener<String>() {
-				@Override
-				public void changed(ObservableValue<? extends String> arg0, String arg1, String arg2) {
-					name.setPromptText(suggestFieldName(foreignKey.getSelectionModel().getSelectedItem(), foreignField.getSelectionModel().getSelectedItem()));
-				}
-			});
-			
-			add.disableProperty().bind(foreignField.getSelectionModel().selectedItemProperty().isNull());
-			
-			add.addEventHandler(ActionEvent.ANY, new EventHandler<ActionEvent>() {
-				@Override
-				public void handle(ActionEvent arg0) {
-					ForeignNameField field = new ForeignNameField();
-					if (name.getText().trim().isEmpty()) {
-						field.setLocalName(suggestFieldName(foreignKey.getSelectionModel().getSelectedItem(), foreignField.getSelectionModel().getSelectedItem()));
-					}
-					else {
-						field.setLocalName(NamingConvention.LOWER_CAMEL_CASE.apply(NamingConvention.UNDERSCORE.apply(name.getText())));
-					}
-					field.setForeignName(foreignKey.getSelectionModel().getSelectedItem() + ":" + foreignField.getSelectionModel().getSelectedItem());
-					if (instance.getConfig().getForeignFields() == null) {
-						instance.getConfig().setForeignFields(new ArrayList<ForeignNameField>());
-					}
-					instance.getConfig().getForeignFields().add(field);
-					drawExistingFields(instance, main, foreignFields);
-					MainController.getInstance().setChanged();
 				}
 			});
 		}
