@@ -15,14 +15,17 @@ import be.nabu.eai.developer.api.EntryAcceptor;
 import be.nabu.eai.developer.collection.ApplicationManager;
 import be.nabu.eai.developer.collection.EAICollectionUtils;
 import be.nabu.eai.developer.util.EAIDeveloperUtils;
+import be.nabu.eai.module.jdbc.pool.JDBCPoolArtifact;
 import be.nabu.eai.module.services.crud.CRUDArtifact;
 import be.nabu.eai.module.services.crud.CRUDArtifactManager;
 import be.nabu.eai.module.services.crud.provider.CRUDProviderArtifact;
+import be.nabu.eai.module.web.application.WebApplication;
 import be.nabu.eai.repository.CollectionImpl;
 import be.nabu.eai.repository.api.Collection;
 import be.nabu.eai.repository.api.Entry;
 import be.nabu.eai.repository.resources.RepositoryEntry;
 import be.nabu.libs.artifacts.api.DataSourceProviderArtifact;
+import be.nabu.libs.services.api.DefinedService;
 import be.nabu.libs.types.api.ComplexType;
 import be.nabu.libs.types.api.DefinedType;
 import be.nabu.libs.types.api.SynchronizableTypeRegistry;
@@ -33,7 +36,6 @@ import javafx.beans.value.ChangeListener;
 import javafx.beans.value.ObservableValue;
 import javafx.event.ActionEvent;
 import javafx.event.EventHandler;
-import javafx.scene.Node;
 import javafx.scene.control.Button;
 import javafx.scene.control.CheckBox;
 import javafx.scene.control.ComboBox;
@@ -231,11 +233,24 @@ public class CRUDCollectionManagerFactory implements CollectionManagerFactory {
 							stage.hide();
 						}
 					});
-					
+
 					create.addEventHandler(ActionEvent.ANY, new EventHandler<ActionEvent>() {
 						@Override
 						public void handle(ActionEvent arg0) {
 							Entry databaseEntry = (Entry) databases.getSelectionModel().getSelectedItem().getContent();
+							// check the target pool, see if it has the change tracking synced, if so, we can use it!
+							boolean hasChangeTracking = false;
+							try {
+								JDBCPoolArtifact pool = (JDBCPoolArtifact) databaseEntry.getNode().getArtifact();
+								for (DefinedType type : pool.getManagedTypes()) {
+									if ("nabu.cms.core.types.emodel.core.NodeHistoryValue".equals(type.getId()) || "nabu.cms.core.types.model.core.NodeHistoryValue".equals(type.getId())) {
+										hasChangeTracking = true;
+									}
+								}
+							}
+							catch (Exception e) {
+								MainController.getInstance().notify(e);
+							}
 							try {
 								Entry crudDatabaseEntry = getCrudDatabaseEntry((RepositoryEntry) entry, databaseEntry);
 								
@@ -252,7 +267,39 @@ public class CRUDCollectionManagerFactory implements CollectionManagerFactory {
 										RepositoryEntry crudEntry = ((RepositoryEntry) crudDatabaseEntry).createNode(finalName, new CRUDArtifactManager(), true);
 										CRUDArtifact artifact = new CRUDArtifact(crudEntry.getId(), crudEntry.getContainer(), crudEntry.getRepository());
 										artifact.getConfig().setCoreType((DefinedType) entry.getRepository().resolve(typeId));
-										artifact.getConfig().setProvider((CRUDProviderArtifact) entry.getRepository().resolve("nabu.services.crud.provider.basic.provider"));
+										
+										String provider = "nabu.services.crud.provider.basic.provider";
+										// check if we are a node (model or emodel) extension
+										DefinedType searching = artifact.getConfig().getCoreType();
+										while (searching != null) {
+											if ("nabu.cms.core.types.model.core.Node".equals(searching.getId())) {
+												provider = "nabu.cms.core.providers.crud.node.provider";
+												break;
+											}
+											else if ("nabu.cms.core.types.emodel.core.Node".equals(searching.getId())) {
+												provider = "nabu.cms.core.providers.crud.enode.provider";
+												break;
+											}
+											if (searching.getSuperType() instanceof DefinedType) {
+												searching = (DefinedType) searching.getSuperType();
+											}
+											else {
+												break;
+											}
+										}
+										
+										artifact.getConfig().setProvider((CRUDProviderArtifact) entry.getRepository().resolve(provider));
+										if (hasChangeTracking) {
+											artifact.getConfig().setChangeTracker((DefinedService) entry.getRepository().resolve("nabu.cms.core.providers.misc.changeTracker"));
+										}
+										// add cms change tracker?
+										// best effort set the jdbc connection, this shouldn't fail...?
+										try {
+											artifact.getConfig().setConnection((DataSourceProviderArtifact) databaseEntry.getNode().getArtifact());
+										}
+										catch (Exception e) {
+											MainController.getInstance().notify(e);
+										}
 										new CRUDArtifactManager().save(crudEntry, artifact);
 										if (!prettyName.equals(name)) {
 											crudEntry.getNode().setName(prettyName);
