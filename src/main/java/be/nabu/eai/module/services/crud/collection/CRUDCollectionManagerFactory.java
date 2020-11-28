@@ -263,7 +263,8 @@ public class CRUDCollectionManagerFactory implements CollectionManagerFactory {
 										Platform.runLater(new Runnable() {
 											@Override
 											public void run() {
-												EAIDeveloperUtils.reload(crudEntry.getId());
+												MainController.getInstance().getRepository().reload(crudEntry.getId());
+												EAIDeveloperUtils.reload(crudEntry.getId(), true);
 											}
 										});
 									}

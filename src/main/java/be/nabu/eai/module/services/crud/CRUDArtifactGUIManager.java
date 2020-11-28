@@ -98,7 +98,7 @@ public class CRUDArtifactGUIManager extends BaseJAXBGUIManager<CRUDConfiguration
 	@Override
 	protected List<String> getBlacklistedProperties() {
 		return Arrays.asList("createBlacklistFields", "updateBlacklistFields", "listBlacklistFields", "updateRegenerateFields",
-				"securityContextField", "parentField", "filters", "foreignFields");
+				"securityContextField", "parentField", "filters", "foreignFields", "coreType");
 	}
 
 	@Override
