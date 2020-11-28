@@ -44,7 +44,6 @@ import javafx.scene.control.Button;
 import javafx.scene.control.CheckBox;
 import javafx.scene.control.ComboBox;
 import javafx.scene.control.Label;
-import javafx.scene.control.Separator;
 import javafx.scene.control.TextField;
 import javafx.scene.control.TitledPane;
 import javafx.scene.input.MouseEvent;
@@ -450,9 +449,35 @@ public class CRUDArtifactGUIManager extends BaseJAXBGUIManager<CRUDConfiguration
 				MainController.getInstance().setChanged();
 			}
 		});
+		Button addAll = new Button("All Filters");
+		addAll.setGraphic(MainController.loadFixedSizeGraphic("icons/add-list.png", 12));
+		addAll.addEventHandler(ActionEvent.ANY, new EventHandler<ActionEvent>() {
+			@Override
+			public void handle(ActionEvent arg0) {
+				List<String> usedFields = new ArrayList<String>();
+				for (CRUDFilter filter : instance.getConfig().getFilters()) {
+					if (filter.getKey() != null) {
+						usedFields.add(filter.getKey());
+					}
+				}
+				for (String field : fields(instance, true)) {
+					if (!usedFields.contains(field)) {
+						CRUDFilter filter = new CRUDFilter();
+						filter.setKey(field);
+						filter.setOperator("=");
+						instance.getConfig().getFilters().add(filter);
+					}
+				}
+				// redraw this section
+				list.getChildren().clear();
+				populateList(instance, list);
+				MainController.getInstance().setChanged();
+			}
+		});
+		
 		HBox buttons = new HBox();
 		buttons.getStyleClass().add("buttons");
-		buttons.getChildren().add(add);
+		buttons.getChildren().addAll(add, addAll);
 		filters.getChildren().add(buttons);
 
 		VBox fields = new VBox();

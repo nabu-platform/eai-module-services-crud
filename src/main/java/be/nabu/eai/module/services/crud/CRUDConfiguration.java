@@ -32,6 +32,8 @@ public class CRUDConfiguration {
 			this.localName = localName;
 		}
 	}
+
+	private boolean allowHeaderAsQueryParameter = true;
 	
 	// the data type we are wrapping around
 	private DefinedType coreType;
@@ -191,6 +193,14 @@ public class CRUDConfiguration {
 	}
 	public void setForeignFields(List<ForeignNameField> foreignFields) {
 		this.foreignFields = foreignFields;
+	}
+
+	@Comment(title = "If you want to create a URL to download the data as a specific type (e.g. excel), you can't manipulate the headers directly to indicate content type, language... By enabling this, you can set a select few headers as a query parameter, specifically 'header:Accept', 'header:Accept-Language' and 'header:'Accept-Content-Disposition'")
+	public boolean isAllowHeaderAsQueryParameter() {
+		return allowHeaderAsQueryParameter;
+	}
+	public void setAllowHeaderAsQueryParameter(boolean allowHeaderAsQueryParameter) {
+		this.allowHeaderAsQueryParameter = allowHeaderAsQueryParameter;
 	}
 	
 }

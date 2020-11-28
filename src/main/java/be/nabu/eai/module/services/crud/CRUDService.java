@@ -332,11 +332,10 @@ public class CRUDService implements DefinedService, WebFragment, RESTFragment, A
 										values = wildCardValues;
 									}
 									
-									// if we have a boolean operator which is set as input and we _don't_ have input, we explicitly set the value false
-									// this causes it to be filtered out when we send it to "selectFiltered". no values would allow it to pass
-									// we want the boolean to be "false" by default
+									// if we have a boolean operator which is set as input and we _don't_ have input, we explicitly set the value null
+									// this causes it to be filtered out when we send it to "selectFiltered". if we leave the values empty, the filter will be applied
 									if (values.isEmpty() && ("is null".equals(filter.getOperator()) || "is not null".equals(filter.getOperator()))) {
-										values.add(false);
+										values.add(null);
 									}
 								}
 								// if it is not an input, or actual input was provided, do it
@@ -779,7 +778,11 @@ public class CRUDService implements DefinedService, WebFragment, RESTFragment, A
 						if (parent != null && parent.getName().equals(filter.getKey())) {
 							continue;
 						}
-						Element<?> element = ((ComplexType) artifact.getConfig().getCoreType()).get(filter.getKey());
+						// it might be an extension!
+						Element<?> element = singleOutput.get(filter.getKey());
+						if (element == null) {
+							element = ((ComplexType) artifact.getConfig().getCoreType()).get(filter.getKey());
+						}
 						SimpleElementImpl childElement = new SimpleElementImpl(filter.getAlias() == null ? filter.getKey() : filter.getAlias(), (SimpleType<?>) element.getType(), input, new ValueImpl<Integer>(MinOccursProperty.getInstance(), 0));
 						// only for some filters do we support the list entries
 						if ("=".equals(filter.getOperator()) || "<>".equals(filter.getOperator())) {

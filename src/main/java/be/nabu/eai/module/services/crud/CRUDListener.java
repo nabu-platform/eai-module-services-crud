@@ -14,6 +14,7 @@ import java.util.Map;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import be.nabu.eai.module.rest.RESTUtils;
 import be.nabu.eai.module.services.crud.CRUDService.CRUDType;
 import be.nabu.eai.module.web.application.WebApplication;
 import be.nabu.eai.module.web.application.WebApplicationUtils;
@@ -105,6 +106,9 @@ public class CRUDListener implements EventHandler<HTTPRequest, HTTPResponse> {
 				return null;
 			}
 			
+			// if we have chosen this rest service, check if the server is offline
+			WebApplicationUtils.checkOffline(application, request);
+			
 			Map<String, List<String>> queryProperties = URIUtils.getQueryProperties(uri);
 			
 			token = WebApplicationUtils.getToken(application, request);
@@ -194,21 +198,32 @@ public class CRUDListener implements EventHandler<HTTPRequest, HTTPResponse> {
 			}
 			
 			if (output != null) {
-				MarshallableBinding binding;
-				List<String> acceptedContentTypes = request.getContent() != null
-					? MimeUtils.getAcceptedContentTypes(request.getContent().getHeaders())
-					: new ArrayList<String>();
-				acceptedContentTypes.retainAll(ResponseMethods.allowedTypes);
-				contentType = acceptedContentTypes.isEmpty() ? "application/json" : acceptedContentTypes.get(0);
-				if (contentType.equalsIgnoreCase("application/xml")) {
-					binding = new XMLBinding(output.getType(), charset);
+				if (artifact.getConfig().isAllowHeaderAsQueryParameter()) {
+					WebApplicationUtils.queryToHeader(request, queryProperties);
 				}
-				else if (contentType.equalsIgnoreCase("application/json")) {
-					binding = new JSONBinding(output.getType(), charset);
+				
+				
+				MarshallableBinding binding = RESTUtils.getOutputBinding(request, output.getType(), charset, "application/json", false, false);
+				
+//				List<String> acceptedContentTypes = request.getContent() != null
+//					? MimeUtils.getAcceptedContentTypes(request.getContent().getHeaders())
+//					: new ArrayList<String>();
+//				acceptedContentTypes.retainAll(ResponseMethods.allowedTypes);
+//				contentType = acceptedContentTypes.isEmpty() ? "application/json" : acceptedContentTypes.get(0);
+//				if (contentType.equalsIgnoreCase("application/xml")) {
+//					binding = new XMLBinding(output.getType(), charset);
+//				}
+//				else if (contentType.equalsIgnoreCase("application/json")) {
+//					binding = new JSONBinding(output.getType(), charset);
+//				}
+//				else {
+//					throw new HTTPException(500, "Unsupported response content type: " + contentType);
+//				}
+				
+				if (binding == null) {
+					throw new HTTPException(500, "Unsupported response content types: " + MimeUtils.getAcceptedContentTypes(request.getContent().getHeaders()));
 				}
-				else {
-					throw new HTTPException(500, "Unsupported response content type: " + contentType);
-				}
+				contentType = RESTUtils.getContentTypeFor(binding);
 				
 				List<Header> headers = new ArrayList<Header>();
 				ByteArrayOutputStream content = new ByteArrayOutputStream();

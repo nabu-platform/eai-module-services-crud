@@ -201,7 +201,7 @@ public class CRUDArtifactManager extends JAXBArtifactManager<CRUDConfiguration, 
 		}
 	}
 	
-	static List<String> getPrimary(ComplexType parent) {
+	public static List<String> getPrimary(ComplexType parent) {
 		List<String> primaries = new ArrayList<String>();
 		for (Element<?> element : TypeUtils.getAllChildren(parent)) {
 			Value<Boolean> property = element.getProperty(PrimaryKeyProperty.getInstance());
