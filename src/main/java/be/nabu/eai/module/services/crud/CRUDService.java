@@ -15,6 +15,7 @@ import be.nabu.eai.module.web.application.WebApplication;
 import be.nabu.eai.module.web.application.WebFragment;
 import be.nabu.eai.module.web.application.api.PermissionWithRole;
 import be.nabu.eai.module.web.application.api.RESTFragment;
+import be.nabu.eai.repository.util.Filter;
 import be.nabu.libs.artifacts.api.ArtifactWithExceptions;
 import be.nabu.libs.artifacts.api.ExceptionDescription;
 import be.nabu.libs.authentication.api.Permission;
@@ -286,67 +287,9 @@ public class CRUDService implements DefinedService, WebFragment, RESTFragment, A
 						serviceInput.set("limit", input == null ? null : input.get("limit"));
 						serviceInput.set("offset", input == null ? null : input.get("offset"));
 						serviceInput.set("orderBy", input == null ? null : input.get("orderBy"));
-						List<CRUDFilter> filters = new ArrayList<CRUDFilter>();
-						// the previous removed one
-						CRUDFilter removed = null;
+						List<Filter> filters = new ArrayList<Filter>();
 						if (artifact.getConfig().getFilters() != null) {
-							List<String> inputOperators = Arrays.asList("=", "<>", ">", "<", ">=", "<=", "like", "ilike");
-							for (CRUDFilter filter : artifact.getConfig().getFilters()) {
-								// no operator or no key is invalid
-								// additionally if you have an input operator but don't have the flag "isinput" checked, it can only produce invalid results
-								if (filter.getOperator() == null || filter.getKey() == null
-										|| (!filter.isInput() && inputOperators.contains(filter.getOperator()))) {
-									continue;
-								}
-								// we don't want the ilike statements to make it to the end
-								CRUDFilter newFilter = new CRUDFilter();
-								newFilter.setKey(filter.getKey());
-								newFilter.setOperator("ilike".equals(filter.getOperator()) ? "like" : filter.getOperator());
-								newFilter.setCaseInsensitive(filter.isCaseInsensitive() || "ilike".equals(filter.getOperator()));
-								// if we removed the previous filter and it was an "and", we can't make this an or, cause the end result would not match
-								// if the previous one was also an or (removed or not), it doesn't matter
-								newFilter.setOr(filter.isOr() && (removed == null || removed.isOr()));
-								List<Object> values = new ArrayList<Object>();
-								newFilter.setValues(values);
-								if (filter.isInput()) {
-									Object inputtedValues = input == null ? null : input.get("filter/" + (filter.getAlias() == null ? filter.getKey() : filter.getAlias()));
-									// could be a list or not a list
-									if (inputtedValues instanceof Iterable) {
-										for (Object inputtedValue : (Iterable<Object>) inputtedValues) {
-											values.add(inputtedValue);
-										}
-									}
-									else if (inputtedValues != null) {
-										values.add(inputtedValues);
-									}
-									// if we have a like, add "%"
-									if ("like".equals(newFilter.getOperator())) {
-										List<Object> wildCardValues = new ArrayList<Object>();
-										for (Object value : values) {
-											if (value instanceof String) {
-												value = "%" + value.toString() + "%";
-											}
-											wildCardValues.add(value);
-										}
-										newFilter.setValues(wildCardValues);
-										values = wildCardValues;
-									}
-									
-									// if we have a boolean operator which is set as input and we _don't_ have input, we explicitly set the value null
-									// this causes it to be filtered out when we send it to "selectFiltered". if we leave the values empty, the filter will be applied
-									if (values.isEmpty() && ("is null".equals(filter.getOperator()) || "is not null".equals(filter.getOperator()))) {
-										values.add(null);
-									}
-								}
-								// if it is not an input, or actual input was provided, do it
-								if (!filter.isInput() || !values.isEmpty()) {
-									filters.add(newFilter);
-									removed = null;
-								}
-								else {
-									removed = filter;
-								}
-							}
+							transformFilters(artifact.getConfig().getFilters(), input, filters);
 						}
 						serviceInput.set("filters", filters);
 					break;
@@ -380,7 +323,70 @@ public class CRUDService implements DefinedService, WebFragment, RESTFragment, A
 				}
 				return output;
 			}
+
 		};
+	}
+	
+	@SuppressWarnings("unchecked")
+	public static void transformFilters(List<CRUDFilter> sourceFilters, ComplexContent input, List<Filter> targetFilters) {
+		// the previous removed one
+		CRUDFilter removed = null;
+		for (CRUDFilter filter : sourceFilters) {
+			// no operator or no key is invalid
+			// additionally if you have an input operator but don't have the flag "isinput" checked, it can only produce invalid results
+			if (filter.getOperator() == null || filter.getKey() == null
+					|| (!filter.isInput() && inputOperators.contains(filter.getOperator()))) {
+				continue;
+			}
+			// we don't want the ilike statements to make it to the end
+			CRUDFilter newFilter = new CRUDFilter();
+			newFilter.setKey(filter.getKey());
+			newFilter.setOperator("ilike".equals(filter.getOperator()) ? "like" : filter.getOperator());
+			newFilter.setCaseInsensitive(filter.isCaseInsensitive() || "ilike".equals(filter.getOperator()));
+			// if we removed the previous filter and it was an "and", we can't make this an or, cause the end result would not match
+			// if the previous one was also an or (removed or not), it doesn't matter
+			newFilter.setOr(filter.isOr() && (removed == null || removed.isOr()));
+			List<Object> values = new ArrayList<Object>();
+			newFilter.setValues(values);
+			if (filter.isInput()) {
+				Object inputtedValues = input == null ? null : input.get("filter/" + (filter.getAlias() == null ? filter.getKey() : filter.getAlias()));
+				// could be a list or not a list
+				if (inputtedValues instanceof Iterable) {
+					for (Object inputtedValue : (Iterable<Object>) inputtedValues) {
+						values.add(inputtedValue);
+					}
+				}
+				else if (inputtedValues != null) {
+					values.add(inputtedValues);
+				}
+				// if we have a like, add "%"
+				if ("like".equals(newFilter.getOperator())) {
+					List<Object> wildCardValues = new ArrayList<Object>();
+					for (Object value : values) {
+						if (value instanceof String) {
+							value = "%" + value.toString() + "%";
+						}
+						wildCardValues.add(value);
+					}
+					newFilter.setValues(wildCardValues);
+					values = wildCardValues;
+				}
+				
+				// if we have a boolean operator which is set as input and we _don't_ have input, we explicitly set the value null
+				// this causes it to be filtered out when we send it to "selectFiltered". if we leave the values empty, the filter will be applied
+				if (values.isEmpty() && ("is null".equals(filter.getOperator()) || "is not null".equals(filter.getOperator()))) {
+					values.add(null);
+				}
+			}
+			// if it is not an input, or actual input was provided, do it
+			if (!filter.isInput() || !values.isEmpty()) {
+				targetFilters.add(newFilter);
+				removed = null;
+			}
+			else {
+				removed = filter;
+			}
+		}
 	}
 
 	@Override

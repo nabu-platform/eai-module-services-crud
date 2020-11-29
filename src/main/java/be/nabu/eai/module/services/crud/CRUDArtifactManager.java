@@ -39,6 +39,7 @@ import be.nabu.libs.types.properties.NameProperty;
 import be.nabu.libs.types.properties.PrimaryKeyProperty;
 import be.nabu.libs.types.properties.RestrictProperty;
 import be.nabu.libs.types.structure.DefinedStructure;
+import be.nabu.libs.types.structure.Structure;
 
 public class CRUDArtifactManager extends JAXBArtifactManager<CRUDConfiguration, CRUDArtifact> implements ArtifactRepositoryManager<CRUDArtifact> {
 
@@ -132,25 +133,7 @@ public class CRUDArtifactManager extends JAXBArtifactManager<CRUDConfiguration, 
 				synchronize(output, (ComplexType) artifact.getConfig().getCoreType());
 				// we add the "extended" fields
 				if (artifact.getConfig().getForeignFields() != null) {
-					for (ForeignNameField field : artifact.getConfig().getForeignFields()) {
-						// we need the same stats as the target (so same simple type, same optional-ness etc)
-						String[] split = field.getForeignName().split(":");
-						Element<?> element = ((ComplexType) artifact.getConfig().getCoreType()).get(split[0]);
-						if (element != null) {
-							Value<String> property = element.getProperty(ForeignKeyProperty.getInstance());
-							if (property != null && property.getValue() != null) {
-								String[] split2 = property.getValue().split(":");
-								Artifact resolve = artifact.getRepository().resolve(split2[0]);
-								if (resolve instanceof ComplexType) {
-									Element<?> targetElement = ((ComplexType) resolve).get(split[1]);
-									Element<?> clone = TypeBaseUtils.clone(targetElement, output);
-									clone.setProperty(new ValueImpl<String>(ForeignNameProperty.getInstance(), field.getForeignName()));
-									clone.setProperty(new ValueImpl<String>(NameProperty.getInstance(), field.getLocalName()));
-									output.add(clone);
-								}
-							}
-						}
-					}
+					injectForeignFields(artifact.getConfig().getForeignFields(), artifact.getConfig().getCoreType(), artifact.getRepository(), output);
 				}
 				
 				outputList = new DefinedStructure();
@@ -187,6 +170,55 @@ public class CRUDArtifactManager extends JAXBArtifactManager<CRUDConfiguration, 
 			}
 		}
 		return entries;
+	}
+
+	public static List<String> injectForeignFields(List<ForeignNameField> foreignFields, DefinedType coreType, Repository repository, Structure output) {
+		List<String> fields = new ArrayList<String>();
+		for (ForeignNameField field : foreignFields) {
+			// we need the same stats as the target (so same simple type, same optional-ness etc)
+			String[] split = field.getForeignName().split(":");
+			ComplexType current = ((ComplexType) coreType);
+			Element<?> targetElement = null;
+			// if any field along the way is optional, the entire end result is optional because we'll be doing an outer join
+			boolean optional = false;
+			for (int i = 0; i < split.length - 1; i++) {
+				Element<?> element = current.get(split[i]);
+				if (element != null) {
+					Value<Integer> minOccurs = element.getProperty(MinOccursProperty.getInstance());
+					if (minOccurs != null && minOccurs.getValue() != null && minOccurs.getValue() == 0) {
+						optional = true;
+					}
+					Value<String> property = element.getProperty(ForeignKeyProperty.getInstance());
+					if (property != null && property.getValue() != null) {
+						String[] split2 = property.getValue().split(":");
+						Artifact resolve = repository.resolve(split2[0]);
+						if (resolve instanceof ComplexType) {
+							targetElement = ((ComplexType) resolve).get(i == split.length - 2 ? split[i + 1] : split2[1]);
+							current = (ComplexType) resolve;
+						}
+						else {
+							targetElement = null;
+							break;
+						}
+					}
+				}
+				else {
+					targetElement = null;
+					break;
+				}
+			}
+			if (targetElement != null) {
+				Element<?> clone = TypeBaseUtils.clone(targetElement, output);
+				clone.setProperty(new ValueImpl<String>(ForeignNameProperty.getInstance(), field.getForeignName()));
+				clone.setProperty(new ValueImpl<String>(NameProperty.getInstance(), field.getLocalName()));
+				if (optional) {
+					clone.setProperty(new ValueImpl<Integer>(MinOccursProperty.getInstance(), 0));
+				}
+				output.add(clone);
+				fields.add(clone.getName());
+			}
+		}
+		return fields;
 	}
 	
 	private void synchronize(ModifiableComplexType to, ComplexType from) {

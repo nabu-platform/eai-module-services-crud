@@ -1,5 +1,6 @@
 package be.nabu.eai.module.services.crud;
 
+import java.util.ArrayList;
 import java.util.List;
 
 import javax.xml.bind.annotation.XmlRootElement;
@@ -146,6 +147,9 @@ public class CRUDConfiguration {
 		this.listBlacklistFields = listFields;
 	}
 	public List<CRUDFilter> getFilters() {
+		if (filters == null) {
+			filters = new ArrayList<CRUDFilter>();
+		}
 		return filters;
 	}
 	public void setFilters(List<CRUDFilter> filters) {
@@ -189,6 +193,9 @@ public class CRUDConfiguration {
 	}
 	
 	public List<ForeignNameField> getForeignFields() {
+		if (foreignFields == null) {
+			foreignFields = new ArrayList<ForeignNameField>();
+		}
 		return foreignFields;
 	}
 	public void setForeignFields(List<ForeignNameField> foreignFields) {

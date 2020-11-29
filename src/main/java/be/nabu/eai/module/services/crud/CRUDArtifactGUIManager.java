@@ -162,7 +162,7 @@ public class CRUDArtifactGUIManager extends BaseJAXBGUIManager<CRUDConfiguration
 		main.setFillWidth(true);
 		
 		// select the security context field
-		ComboBox<String> securityContextField = newFieldCombo(instance, false);
+		ComboBox<String> securityContextField = newFieldCombo(instance.getConfig().getForeignFields(), instance.getConfig().getCoreType(), false);
 		securityContextField.getSelectionModel().select(instance.getConfig().getSecurityContextField());
 		securityContextField.getSelectionModel().selectedItemProperty().addListener(new ChangeListener<String>() {
 			@Override
@@ -262,7 +262,7 @@ public class CRUDArtifactGUIManager extends BaseJAXBGUIManager<CRUDConfiguration
 		maximize(main);
 	}
 	
-	private boolean operatorIsInput(String operator) {
+	private static boolean operatorIsInput(String operator) {
 		// without an operator, we assume it is an input
 		if (operator == null) {
 			return true;
@@ -281,6 +281,44 @@ public class CRUDArtifactGUIManager extends BaseJAXBGUIManager<CRUDConfiguration
 			instance.getConfig().setFilters(new ArrayList<CRUDFilter>());
 		}
 		
+		Label label;
+		drawFilters(instance.getConfig().getForeignFields(), instance.getConfig().getCoreType(), instance.getConfig().getFilters(), main, new Redrawer() {
+			@Override
+			public void redraw() {
+				list.getChildren().clear();
+				populateList(instance, list);				
+			}
+		}, true);
+
+		VBox fields = new VBox();
+		fields.getStyleClass().addAll("section");
+		main.getChildren().add(fields);
+		label = new Label("Fields");
+		label.getStyleClass().add("h1");
+		fields.getChildren().add(label);
+		
+		// then checkboxes to choose the fields you want to blacklist
+		label = new Label("Choose the fields you want to blacklist from the resultset:");
+		label.getStyleClass().add("p");
+		fields.getChildren().add(label);
+		if (instance.getConfig().getListBlacklistFields() == null) {
+			instance.getConfig().setListBlacklistFields(new ArrayList<String>());
+		}
+		populateChecklist(instance, fields, instance.getConfig().getListBlacklistFields(), new ArrayList<String>(), false);
+		
+		VBox foreign = new VBox();
+		foreign.getStyleClass().add("section");
+		drawForeignNameFields(instance.getConfig().getForeignFields(), instance.getConfig().getCoreType(), instance.getRepository(), foreign);
+		if (!foreign.getChildren().isEmpty()) {
+			main.getChildren().add(foreign);
+		}
+	}
+
+	public static interface Redrawer {
+		public void redraw();
+	}
+	
+	public static void drawFilters(List<ForeignNameField> foreignFields, DefinedType coreType, List<CRUDFilter> crudFilters, VBox main, Redrawer redrawer, boolean allowAddAll) {
 		VBox filters = new VBox();
 		main.getChildren().add(filters);
 		filters.getStyleClass().addAll("section", "block");
@@ -290,13 +328,13 @@ public class CRUDArtifactGUIManager extends BaseJAXBGUIManager<CRUDConfiguration
 		
 		Label nodata = new Label("You have not yet added any filters. Click the add filter button below to get started.");
 		nodata.getStyleClass().add("p");
-		if (instance.getConfig().getFilters() == null || instance.getConfig().getFilters().isEmpty()) {
+		if (crudFilters.isEmpty()) {
 			filters.getChildren().add(nodata);
 		}
 		
 		// if you want to hardcode values, add it to the operator (for now)
 		// first we define the filters
-		for (CRUDFilter filter : instance.getConfig().getFilters()) {
+		for (CRUDFilter filter : crudFilters) {
 			HBox filterBox = new HBox();
 			filterBox.setAlignment(Pos.CENTER_LEFT);
 			ComboBox<String> mainOperator = new ComboBox<String>();
@@ -324,7 +362,7 @@ public class CRUDArtifactGUIManager extends BaseJAXBGUIManager<CRUDConfiguration
 					MainController.getInstance().setChanged();
 				}
 			});
-			ComboBox<String> field = newFieldCombo(instance, true);
+			ComboBox<String> field = newFieldCombo(foreignFields, coreType, true);
 			field.getSelectionModel().select(filter.getKey());
 			field.getSelectionModel().selectedItemProperty().addListener(new ChangeListener<String>() {
 				@Override
@@ -384,10 +422,9 @@ public class CRUDArtifactGUIManager extends BaseJAXBGUIManager<CRUDConfiguration
 			remove.addEventHandler(ActionEvent.ANY, new EventHandler<ActionEvent>() {
 				@Override
 				public void handle(ActionEvent arg0) {
-					instance.getConfig().getFilters().remove(filter);
+					crudFilters.remove(filter);
 					// redraw this section
-					list.getChildren().clear();
-					populateList(instance, list);
+					redrawer.redraw();
 					MainController.getInstance().setChanged();
 				}
 			});
@@ -396,14 +433,13 @@ public class CRUDArtifactGUIManager extends BaseJAXBGUIManager<CRUDConfiguration
 			up.addEventHandler(ActionEvent.ANY, new EventHandler<ActionEvent>() {
 				@Override
 				public void handle(ActionEvent arg0) {
-					int indexOf = instance.getConfig().getFilters().indexOf(filter);
+					int indexOf = crudFilters.indexOf(filter);
 					if (indexOf > 0) {
-						instance.getConfig().getFilters().remove(indexOf);
-						instance.getConfig().getFilters().add(indexOf - 1, filter);
+						crudFilters.remove(indexOf);
+						crudFilters.add(indexOf - 1, filter);
 					}
 					// redraw this section
-					list.getChildren().clear();
-					populateList(instance, list);
+					redrawer.redraw();
 					MainController.getInstance().setChanged();
 				}
 			});
@@ -413,14 +449,13 @@ public class CRUDArtifactGUIManager extends BaseJAXBGUIManager<CRUDConfiguration
 			down.addEventHandler(ActionEvent.ANY, new EventHandler<ActionEvent>() {
 				@Override
 				public void handle(ActionEvent arg0) {
-					int indexOf = instance.getConfig().getFilters().indexOf(filter);
-					if (indexOf < instance.getConfig().getFilters().size() - 1) {
-						instance.getConfig().getFilters().remove(indexOf);
-						instance.getConfig().getFilters().add(indexOf + 1, filter);
+					int indexOf = crudFilters.indexOf(filter);
+					if (indexOf < crudFilters.size() - 1) {
+						crudFilters.remove(indexOf);
+						crudFilters.add(indexOf + 1, filter);
 					}
 					// redraw this section
-					list.getChildren().clear();
-					populateList(instance, list);
+					redrawer.redraw();
 					MainController.getInstance().setChanged();
 				}
 			});
@@ -442,10 +477,9 @@ public class CRUDArtifactGUIManager extends BaseJAXBGUIManager<CRUDConfiguration
 		add.addEventHandler(ActionEvent.ANY, new EventHandler<ActionEvent>() {
 			@Override
 			public void handle(ActionEvent arg0) {
-				instance.getConfig().getFilters().add(new CRUDFilter());
+				crudFilters.add(new CRUDFilter());
 				// redraw this section
-				list.getChildren().clear();
-				populateList(instance, list);
+				redrawer.redraw();
 				MainController.getInstance().setChanged();
 			}
 		});
@@ -455,53 +489,32 @@ public class CRUDArtifactGUIManager extends BaseJAXBGUIManager<CRUDConfiguration
 			@Override
 			public void handle(ActionEvent arg0) {
 				List<String> usedFields = new ArrayList<String>();
-				for (CRUDFilter filter : instance.getConfig().getFilters()) {
+				for (CRUDFilter filter : crudFilters) {
 					if (filter.getKey() != null) {
 						usedFields.add(filter.getKey());
 					}
 				}
-				for (String field : fields(instance, true)) {
+				for (String field : fields(foreignFields, coreType, true)) {
 					if (!usedFields.contains(field)) {
 						CRUDFilter filter = new CRUDFilter();
 						filter.setKey(field);
 						filter.setOperator("=");
-						instance.getConfig().getFilters().add(filter);
+						crudFilters.add(filter);
 					}
 				}
 				// redraw this section
-				list.getChildren().clear();
-				populateList(instance, list);
+				redrawer.redraw();
 				MainController.getInstance().setChanged();
 			}
 		});
 		
 		HBox buttons = new HBox();
 		buttons.getStyleClass().add("buttons");
-		buttons.getChildren().addAll(add, addAll);
+		buttons.getChildren().addAll(add);
+		if (allowAddAll) {
+			buttons.getChildren().addAll(addAll);	
+		}
 		filters.getChildren().add(buttons);
-
-		VBox fields = new VBox();
-		fields.getStyleClass().addAll("section");
-		main.getChildren().add(fields);
-		label = new Label("Fields");
-		label.getStyleClass().add("h1");
-		fields.getChildren().add(label);
-		
-		// then checkboxes to choose the fields you want to blacklist
-		label = new Label("Choose the fields you want to blacklist from the resultset:");
-		label.getStyleClass().add("p");
-		fields.getChildren().add(label);
-		if (instance.getConfig().getListBlacklistFields() == null) {
-			instance.getConfig().setListBlacklistFields(new ArrayList<String>());
-		}
-		populateChecklist(instance, fields, instance.getConfig().getListBlacklistFields(), new ArrayList<String>(), false);
-		
-		VBox foreign = new VBox();
-		foreign.getStyleClass().add("section");
-		drawForeignNameFields(instance, foreign);
-		if (!foreign.getChildren().isEmpty()) {
-			main.getChildren().add(foreign);
-		}
 	}
 	
 	// currently we are limited to selecting from the table itself, not yet parent tables etc
@@ -525,7 +538,7 @@ public class CRUDArtifactGUIManager extends BaseJAXBGUIManager<CRUDConfiguration
 		return fields;
 	}
 	
-	private Map<String, String> getForeignKeys(ComplexType type) {
+	private static Map<String, String> getForeignKeys(ComplexType type) {
 		Map<String, String> keys = new HashMap<String, String>();
 		// suppose your type extends another type (e.g. node) and you want to use a foreign key from that parent type, it "should" be possible. the expansion should get the correct binding
 		for (Element<?> element : TypeUtils.getAllChildren(type)) {
@@ -536,7 +549,7 @@ public class CRUDArtifactGUIManager extends BaseJAXBGUIManager<CRUDConfiguration
 		}
 		return keys;
 	}
-	private List<String> getChildren(ComplexType type) {
+	private static List<String> getChildren(ComplexType type) {
 		List<String> children = new ArrayList<String>();
 		for (Element<?> element : TypeUtils.getAllChildren(type)) {
 			children.add(element.getName());
@@ -544,8 +557,8 @@ public class CRUDArtifactGUIManager extends BaseJAXBGUIManager<CRUDConfiguration
 		return children;
 	}
 	
-	private void drawForeignNameFields(CRUDArtifact instance, VBox main) {
-		Map<String, String> foreignKeys = getForeignKeys((ComplexType) instance.getConfig().getCoreType());
+	public static void drawForeignNameFields(List<ForeignNameField> foreignFields, DefinedType coreType, Repository repository, VBox main) {
+		Map<String, String> foreignKeys = getForeignKeys((ComplexType) coreType);
 		// you need at least some foreign keys in your current table to do this
 		if (!foreignKeys.isEmpty()) {
 			Label foreign = new Label("Import Fields");
@@ -558,41 +571,39 @@ public class CRUDArtifactGUIManager extends BaseJAXBGUIManager<CRUDConfiguration
 			
 			VBox vbox = new VBox();
 			main.getChildren().add(vbox);
-			drawExistingFields(instance, vbox);
+			drawExistingFields(foreignFields, coreType, repository, vbox);
 		}
 	}
 	
-	private void drawExistingFields(CRUDArtifact instance, VBox main) {
+	private static void drawExistingFields(List<ForeignNameField> foreignFields, DefinedType coreType, Repository repository, VBox main) {
 		main.getChildren().clear();
 		// we first render the already added keys
-		if (instance.getConfig().getForeignFields() != null) {
-			for (ForeignNameField field : instance.getConfig().getForeignFields()) {
-				HBox box = new HBox();
-				box.setAlignment(Pos.CENTER_LEFT);
-				Label localName = new Label(field.getLocalName());
-				localName.setPadding(new Insets(5));
-				localName.getStyleClass().add("crud-field-name");
-				
-				Label remoteName = new Label("(" + field.getForeignName() + ")");
-				remoteName.setPadding(new Insets(5));
-				remoteName.getStyleClass().add("crud-foreign-name");
-				
-				Button remove = new Button();
-				remove.setGraphic(MainController.loadFixedSizeGraphic("icons/delete.png", 12));
-				remove.getStyleClass().add("crud-remove");
-				
-				// remove a field
-				remove.addEventHandler(MouseEvent.MOUSE_CLICKED, new EventHandler<MouseEvent>() {
-					@Override
-					public void handle(MouseEvent arg0) {
-						instance.getConfig().getForeignFields().remove(field);
-						drawExistingFields(instance, main);
-						MainController.getInstance().setChanged();
-					}
-				});
-				box.getChildren().addAll(remove, localName, remoteName);
-				main.getChildren().add(box);
-			}
+		for (ForeignNameField field : foreignFields) {
+			HBox box = new HBox();
+			box.setAlignment(Pos.CENTER_LEFT);
+			Label localName = new Label(field.getLocalName());
+			localName.setPadding(new Insets(5));
+			localName.getStyleClass().add("crud-field-name");
+			
+			Label remoteName = new Label("(" + field.getForeignName() + ")");
+			remoteName.setPadding(new Insets(5));
+			remoteName.getStyleClass().add("crud-foreign-name");
+			
+			Button remove = new Button();
+			remove.setGraphic(MainController.loadFixedSizeGraphic("icons/delete.png", 12));
+			remove.getStyleClass().add("crud-remove");
+			
+			// remove a field
+			remove.addEventHandler(MouseEvent.MOUSE_CLICKED, new EventHandler<MouseEvent>() {
+				@Override
+				public void handle(MouseEvent arg0) {
+					foreignFields.remove(field);
+					drawExistingFields(foreignFields, coreType, repository, main);
+					MainController.getInstance().setChanged();
+				}
+			});
+			box.getChildren().addAll(remove, localName, remoteName);
+			main.getChildren().add(box);
 		}
 		// allow adding of new field
 		TextField name = new TextField();
@@ -604,7 +615,7 @@ public class CRUDArtifactGUIManager extends BaseJAXBGUIManager<CRUDConfiguration
 		name.promptTextProperty().bind(fieldName);
 		
 		HBox combo = new HBox();
-		drawCombo(instance.getRepository(), foreignName, fieldName, (ComplexType) instance.getConfig().getCoreType(), combo, true);
+		drawCombo(repository, foreignName, fieldName, (ComplexType) coreType, combo, true);
 		
 		Button add = new Button();
 		add.setGraphic(MainController.loadFixedSizeGraphic("icons/add.png", 12));
@@ -628,11 +639,8 @@ public class CRUDArtifactGUIManager extends BaseJAXBGUIManager<CRUDConfiguration
 					field.setLocalName(NamingConvention.LOWER_CAMEL_CASE.apply(NamingConvention.UNDERSCORE.apply(name.getText())));
 				}
 				field.setForeignName(foreignName.get());
-				if (instance.getConfig().getForeignFields() == null) {
-					instance.getConfig().setForeignFields(new ArrayList<ForeignNameField>());
-				}
-				instance.getConfig().getForeignFields().add(field);
-				drawExistingFields(instance, main);
+				foreignFields.add(field);
+				drawExistingFields(foreignFields, coreType, repository, main);
 				MainController.getInstance().setChanged();
 			}
 		});
@@ -640,7 +648,7 @@ public class CRUDArtifactGUIManager extends BaseJAXBGUIManager<CRUDConfiguration
 	
 	// the first combo box is from the current type and you _must_ choose a foreign
 	// every other combo box after that can contain any field
-	private void drawCombo(Repository repository, StringProperty field, StringProperty name, ComplexType type, HBox combos, boolean limitToForeign) {
+	private static void drawCombo(Repository repository, StringProperty field, StringProperty name, ComplexType type, HBox combos, boolean limitToForeign) {
 		List<String> children = getChildren(type);
 		Map<String, String> foreignKeys = getForeignKeys(type);
 		if ((limitToForeign && !foreignKeys.isEmpty()) || (!limitToForeign && !children.isEmpty())) {
@@ -723,7 +731,7 @@ public class CRUDArtifactGUIManager extends BaseJAXBGUIManager<CRUDConfiguration
 		// the content within
 		checkboxes.setTileAlignment(Pos.CENTER_LEFT);
 		checkboxes.setPrefRows(5);
-		for (String field : fields(instance, false)) {
+		for (String field : fields(instance.getConfig().getForeignFields(), instance.getConfig().getCoreType(), false)) {
 			if (toIgnore.indexOf(field) >= 0) {
 				continue;
 			}
@@ -754,15 +762,15 @@ public class CRUDArtifactGUIManager extends BaseJAXBGUIManager<CRUDConfiguration
 		pane.getChildren().add(checkboxes);
 	}
 	
-	private List<String> fields(CRUDArtifact instance, boolean includeForeignFields) {
+	private static List<String> fields(List<ForeignNameField> foreignFields, DefinedType coreType, boolean includeForeignFields) {
 		List<String> list = new ArrayList<String>();
-		for (Element<?> child : TypeUtils.getAllChildren((ComplexType) instance.getConfig().getCoreType())) {
+		for (Element<?> child : TypeUtils.getAllChildren((ComplexType) coreType)) {
 			if (child.getType() instanceof SimpleType) {
 				list.add(child.getName());
 			}
 		}
-		if (includeForeignFields && instance.getConfig().getForeignFields() != null) {
-			for (ForeignNameField foreign : instance.getConfig().getForeignFields()) {
+		if (includeForeignFields && foreignFields != null) {
+			for (ForeignNameField foreign : foreignFields) {
 				if (foreign.getLocalName() != null) {
 					list.add(foreign.getLocalName());
 				}
@@ -772,12 +780,13 @@ public class CRUDArtifactGUIManager extends BaseJAXBGUIManager<CRUDConfiguration
 		return list;
 	}
 	
-	private ComboBox<String> newFieldCombo(CRUDArtifact instance, boolean includeForeignFields) {
+	private static ComboBox<String> newFieldCombo(List<ForeignNameField> foreignFields, DefinedType coreType, boolean includeForeignFields) {
 		ComboBox<String> fields = new ComboBox<String>();
-		fields.getItems().addAll(fields(instance, includeForeignFields));
+		fields.getItems().addAll(fields(foreignFields, coreType, includeForeignFields));
 		fields.getItems().add(0, null);
 		return fields;
 	}
+	
 	@Override
 	public String getCategory() {
 		return "Services";
