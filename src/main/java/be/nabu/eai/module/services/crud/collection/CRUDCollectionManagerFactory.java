@@ -323,6 +323,7 @@ public class CRUDCollectionManagerFactory implements CollectionManagerFactory {
 										public void run() {
 											MainController.getInstance().getRepository().reload(crudEntry.getId());
 											EAIDeveloperUtils.reload(crudEntry.getId(), true);
+											MainController.getInstance().open(crudEntry.getId());
 										}
 									});
 								}

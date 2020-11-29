@@ -380,6 +380,7 @@ public class CRUDArtifactGUIManager extends BaseJAXBGUIManager<CRUDConfiguration
 			}
 			
 			ComboBox<String> operator = new ComboBox<String>();
+			operator.getStyleClass().add("smaller");
 			HBox.setHgrow(operator, Priority.ALWAYS);
 			operator.setEditable(true);
 			operator.setValue(filter.getOperator());
@@ -417,6 +418,7 @@ public class CRUDArtifactGUIManager extends BaseJAXBGUIManager<CRUDConfiguration
 			new CustomTooltip("Do you want to allow users to turn this filter on and off?").install(input);
 			
 			HBox buttons = new HBox();
+			buttons.setAlignment(Pos.CENTER_LEFT);
 			Button remove = new Button();
 			remove.setGraphic(MainController.loadFixedSizeGraphic("icons/delete.png", 12));
 			remove.addEventHandler(ActionEvent.ANY, new EventHandler<ActionEvent>() {
@@ -461,12 +463,12 @@ public class CRUDArtifactGUIManager extends BaseJAXBGUIManager<CRUDConfiguration
 			});
 			
 			buttons.getChildren().addAll(up, down, remove);
-			HBox.setMargin(mainOperator, new Insets(10, 10, 10, 0));
-			HBox.setMargin(alias, new Insets(10));
-			HBox.setMargin(field, new Insets(10));
-			HBox.setMargin(operator, new Insets(10));
-			HBox.setMargin(input, new Insets(10));
-			HBox.setMargin(buttons, new Insets(10));
+			HBox.setMargin(mainOperator, new Insets(10, 0, 10, 0));
+			HBox.setMargin(alias, new Insets(10, 0, 10, 10));
+			HBox.setMargin(field, new Insets(10, 0, 10, 10));
+			HBox.setMargin(operator, new Insets(10, 0, 10, 10));
+			HBox.setMargin(input, new Insets(10, 0, 10, 10));
+			HBox.setMargin(buttons, new Insets(10, 0, 10, 10));
 			filterBox.getChildren().addAll(mainOperator, alias, field, operator, buttons, input);
 			filters.getChildren().addAll(filterBox);
 		}
