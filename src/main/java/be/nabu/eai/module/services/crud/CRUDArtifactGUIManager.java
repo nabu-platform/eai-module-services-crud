@@ -9,26 +9,36 @@ import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.Future;
 
 import be.nabu.eai.api.NamingConvention;
 import be.nabu.eai.developer.MainController;
 import be.nabu.eai.developer.impl.CustomTooltip;
+import be.nabu.eai.developer.managers.base.BaseArtifactGUIInstance;
 import be.nabu.eai.developer.managers.base.BaseJAXBGUIManager;
 import be.nabu.eai.developer.managers.util.SimpleProperty;
 import be.nabu.eai.module.services.crud.CRUDConfiguration.ForeignNameField;
 import be.nabu.eai.module.services.crud.provider.CRUDProviderArtifact;
+import be.nabu.eai.repository.EAIResourceRepository;
+import be.nabu.eai.repository.api.Entry;
 import be.nabu.eai.repository.api.Repository;
 import be.nabu.eai.repository.resources.RepositoryEntry;
+import be.nabu.eai.repository.util.SystemPrincipal;
 import be.nabu.libs.artifacts.api.Artifact;
 import be.nabu.libs.property.api.Property;
 import be.nabu.libs.property.api.Value;
+import be.nabu.libs.services.api.DefinedService;
+import be.nabu.libs.services.api.ServiceResult;
 import be.nabu.libs.services.jdbc.JDBCUtils;
 import be.nabu.libs.types.TypeUtils;
+import be.nabu.libs.types.api.ComplexContent;
 import be.nabu.libs.types.api.ComplexType;
 import be.nabu.libs.types.api.DefinedType;
 import be.nabu.libs.types.api.Element;
 import be.nabu.libs.types.api.SimpleType;
 import be.nabu.libs.types.properties.ForeignKeyProperty;
+import be.nabu.libs.validator.api.Validation;
+import javafx.application.Platform;
 import javafx.beans.property.SimpleStringProperty;
 import javafx.beans.property.StringProperty;
 import javafx.beans.value.ChangeListener;
@@ -44,8 +54,11 @@ import javafx.scene.control.Button;
 import javafx.scene.control.CheckBox;
 import javafx.scene.control.ComboBox;
 import javafx.scene.control.Label;
+import javafx.scene.control.ScrollPane;
+import javafx.scene.control.SplitPane;
 import javafx.scene.control.TextField;
 import javafx.scene.control.TitledPane;
+import javafx.scene.control.ScrollPane.ScrollBarPolicy;
 import javafx.scene.input.MouseEvent;
 import javafx.scene.layout.AnchorPane;
 import javafx.scene.layout.HBox;
@@ -56,6 +69,9 @@ import javafx.scene.layout.VBox;
 
 // for list, we could allow configuring a custom jdbc service? if relations get too complex, it might be necessary?
 public class CRUDArtifactGUIManager extends BaseJAXBGUIManager<CRUDConfiguration, CRUDArtifact> {
+
+	private VBox tableContainer;
+	private CRUDArtifact instance;
 
 	static {
 		URL resource = CRUDArtifactGUIManager.class.getClassLoader().getResource("crud.css");
@@ -103,6 +119,27 @@ public class CRUDArtifactGUIManager extends BaseJAXBGUIManager<CRUDConfiguration
 
 	@Override
 	protected void display(CRUDArtifact instance, Pane pane) {
+		this.instance = instance;
+		SplitPane split = new SplitPane();
+		// give most screen real estate to the settings
+		split.setDividerPositions(0.65);
+		
+		AnchorPane.setBottomAnchor(split, 0d);
+		AnchorPane.setTopAnchor(split, 0d);
+		AnchorPane.setLeftAnchor(split, 0d);
+		AnchorPane.setRightAnchor(split, 0d);
+		
+		ScrollPane left = new ScrollPane();
+		left.setFitToWidth(true);
+		left.setFitToHeight(true);
+		
+		ScrollPane right = new ScrollPane();
+		right.setFitToWidth(true);
+		right.setFitToHeight(true);
+		
+		split.getItems().addAll(left, right);
+		
+		
 		// for list, create & update, we want to select the relevant fields to expose to the end user
 		// for list we want to additionally set filters (both exposed as input or hardcoded)
 		
@@ -146,8 +183,75 @@ public class CRUDArtifactGUIManager extends BaseJAXBGUIManager<CRUDConfiguration
 		
 		accordion.setExpandedPane(list);
 		
-		pane.getChildren().add(accordion);
+		left.setContent(accordion);
+		tableContainer = new VBox();
+		right.setContent(tableContainer);
+		pane.getChildren().add(split);
 		maximize(accordion);
+		tableContainer.setPadding(new Insets(5));
+		displayContent(tableContainer, instance);
+	}
+	
+	@Override
+	protected BaseArtifactGUIInstance<CRUDArtifact> newGUIInstance(Entry entry) {
+		return new BaseArtifactGUIInstance<CRUDArtifact>(this, entry) {
+			@Override
+			public List<Validation<?>> save() throws IOException {
+				List<Validation<?>> save = super.save();
+				MainController.getInstance().submitTask("Refresh data", "Refreshing data for " + entry.getId(), new Runnable() {
+					@Override
+					public void run() {
+						Platform.runLater(new Runnable() {
+							@Override
+							public void run() {
+								displayContent(tableContainer, instance);
+							}
+						});
+					}
+				}, 1000);
+				return save;
+			}
+		};
+	}
+	
+	private void displayContent(VBox container, CRUDArtifact artifact) {
+		container.getChildren().clear();
+		Artifact resolve = artifact.getRepository().resolve(artifact.getId() + ".services.list");
+		if (resolve instanceof DefinedService) {
+			// TODO: add filters!
+			try {
+				TilePane filters = new TilePane();
+
+				// we need to retain state for the filters, we also need this for insight!!! make it a generic something?
+				// if you change a value, we need a debounce or a specific button to search (which is annoying)
+//				for (CRUDFilter filter : artifact.getConfig().getFilters()) {
+//					
+//				}
+				if (!filters.getChildren().isEmpty()) {
+					VBox.setMargin(filters, new Insets(5));
+					container.getChildren().add(filters);
+				}
+				
+				DefinedService service = (DefinedService) resolve;
+				ComplexContent input = service.getServiceInterface().getInputDefinition().newInstance();
+				// TODO: make this configurable by the user, then you can use it to for example get a full export!
+				input.set("limit", 100);
+				Future<ServiceResult> run = EAIResourceRepository.getInstance().getServiceRunner().run(service, EAIResourceRepository.getInstance().newExecutionContext(SystemPrincipal.ROOT), input);
+				ServiceResult serviceResult = run.get();
+				if (serviceResult.getException() != null) {
+					throw serviceResult.getException();
+				}
+				ComplexContent output = serviceResult.getOutput();
+				if (output != null) {
+					VBox content = new VBox();
+					MainController.getInstance().showContent(content, output, null);
+					container.getChildren().add(content);
+				}
+			}
+			catch (Exception e) {
+				MainController.getInstance().notify(e);
+			}
+		}
 	}
 
 	private void maximize(Node node) {
