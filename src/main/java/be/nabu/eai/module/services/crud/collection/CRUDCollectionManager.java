@@ -34,16 +34,31 @@ public class CRUDCollectionManager implements CollectionManager {
 		return true;
 	}
 
+	private void addIfExists(List<Entry> services, String name) {
+		Entry child = entry.getRepository().getEntry(entry.getId() + ".services." + name);
+		if (child != null) {
+			services.add(child);
+		}
+	}
+	
 	@Override
 	public Node getSummaryView() {
 		List<Button> buttons = new ArrayList<Button>();
 		buttons.add(EAICollectionUtils.newViewButton(entry));
 		String id = (String) buttons.get(0).getUserData();
 		CRUDArtifact artifact = (CRUDArtifact) MainController.getInstance().getRepository().resolve(id);
+		List<Entry> services = new ArrayList<Entry>();
+		addIfExists(services, "list");
+		addIfExists(services, "create");
+		addIfExists(services, "delete");
+		addIfExists(services, "update");
+		addIfExists(services, "get");
+		
 		if (artifact.getConfig().getCoreType() != null) {
 			List<String> primary = CRUDArtifactManager.getPrimary((ComplexType) artifact.getConfig().getCoreType());
 			// for each action (list, create, update, delete) we add a button! + and - for add and delete
 			if (artifact.getConfig().getProvider() != null && artifact.getConfig().getProvider().getConfig().getListService() != null) {
+				
 				Button list = new Button();
 				new CustomTooltip("List all the available records").install(list);
 				list.setGraphic(MainController.loadGraphic("icons/list.png"));
@@ -97,7 +112,7 @@ public class CRUDCollectionManager implements CollectionManager {
 			}
 		}
 		buttons.add(EAICollectionUtils.newDeleteButton(entry, null));
-		return EAICollectionUtils.newSummaryTile(entry, "crud-big.png", buttons.toArray(new Button[buttons.size()]));
+		return EAICollectionUtils.newSummaryTile(entry, "crud-big.png", services, buttons);
 	}
 	
 }
