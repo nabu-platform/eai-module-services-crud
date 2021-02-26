@@ -202,7 +202,6 @@ public class CRUDListener implements EventHandler<HTTPRequest, HTTPResponse> {
 					WebApplicationUtils.queryToHeader(request, queryProperties);
 				}
 				
-				
 				MarshallableBinding binding = RESTUtils.getOutputBinding(request, output.getType(), charset, "application/json", false, false);
 				
 //				List<String> acceptedContentTypes = request.getContent() != null
@@ -231,6 +230,20 @@ public class CRUDListener implements EventHandler<HTTPRequest, HTTPResponse> {
 				byte[] byteArray = content.toByteArray();
 				headers.add(new MimeHeader("Content-Length", "" + byteArray.length));
 				headers.add(new MimeHeader("Content-Type", contentType + "; charset=" + charset.name()));
+				
+				Map<String, String> values = MimeUtils.getHeaderAsValues("Accept-Content-Disposition", request.getContent().getHeaders());
+				// we are asking for an attachment download
+				if (values.get("value") != null && values.get("value").equalsIgnoreCase("attachment")) {
+					String fileName = values.get("filename");
+					if (fileName != null) {
+						fileName = fileName.replaceAll("[^\\w.-]+", "");
+					}
+					else {
+						fileName = "unnamed";
+					}
+					headers.add(new MimeHeader("Content-Disposition", "attachment;filename=\"" + fileName + "\""));
+				}
+				
 				PlainMimeContentPart part = new PlainMimeContentPart(null,
 					IOUtils.wrap(byteArray, true),
 					headers.toArray(new Header[headers.size()])
@@ -379,6 +392,9 @@ public class CRUDListener implements EventHandler<HTTPRequest, HTTPResponse> {
 				input.set("id", pathParameters.get("id"));
 			break;
 			case LIST:
+				// limit to the user if we have a permission handler
+				// if we don't have one configured, it is not enforced on the other actions either and it could backfire trying to force it here
+				input.set("limitToUser", permissionHandler != null);
 				List<String> limit = queryProperties.get("limit");
 				if (limit != null && !limit.isEmpty()) {
 					input.set("limit", limit.get(0));

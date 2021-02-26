@@ -86,7 +86,7 @@ public class CRUDCollectionManagerFactory implements CollectionManagerFactory {
 		List<CollectionAction> actions = new ArrayList<CollectionAction>();
 		// if it is a valid application, we want to be able to add to it
 		if (MainController.getInstance().newCollectionManager(entry) instanceof ApplicationManager) {
-			actions.add(new CollectionActionImpl(EAICollectionUtils.newActionTile("crud-big.png", "Add CRUD", "Create, read, update and delete database records."), build(entry), new EntryAcceptor() {
+			actions.add(new CollectionActionImpl(EAICollectionUtils.newActionTile("crud-big.png", "Add Interaction", "Create, read, update and delete database records."), build(entry), new EntryAcceptor() {
 				@Override
 				public boolean accept(Entry entry) {
 					Collection collection = entry.getCollection();
@@ -142,12 +142,15 @@ public class CRUDCollectionManagerFactory implements CollectionManagerFactory {
 				buttons.getChildren().addAll(create, cancel);
 				
 				VBox root = new VBox();
-				Stage stage = EAIDeveloperUtils.buildPopup("Create CRUD", root, MainController.getInstance().getActiveStage(), StageStyle.DECORATED, false);
+				Stage stage = EAIDeveloperUtils.buildPopup("Create Interaction", root, MainController.getInstance().getActiveStage(), StageStyle.DECORATED, false);
 				
 				// we want to be able to add multiple CRUD at once, we use checkboxes
 				// if you already have a CRUD with the type name, we assume you generated it properly and we don't offer it as a possibility anymore
 				VBox options = new VBox();
 				Map<String, CheckBox> boxes = new HashMap<String, CheckBox>();
+				
+				Label optionsLabel = new Label("Choose your data type");
+				optionsLabel.getStyleClass().add("p");
 				
 				databases.getSelectionModel().selectedItemProperty().addListener(new ChangeListener<ComboItem>() {
 					@Override
@@ -203,12 +206,13 @@ public class CRUDCollectionManagerFactory implements CollectionManagerFactory {
 								}
 							}
 							if (boxes.isEmpty()) {
-								Label label = new Label("You already have a CRUD artifact for every available type");
+								Label label = new Label("You already have a interaction artifact for every available type");
 								label.getStyleClass().add("p");
 								options.getChildren().add(label);
 								create.setDisable(true);
 							}
 							else {
+								options.getChildren().add(0, optionsLabel);
 								create.setDisable(false);
 							}
 						}
@@ -217,9 +221,10 @@ public class CRUDCollectionManagerFactory implements CollectionManagerFactory {
 				});
 				
 				root.getStyleClass().add("popup-form");
-				Label label = new Label("Create CRUD Artifact");
+				Label label = new Label("Create Interaction");
 				label.getStyleClass().add("h1");
 				root.getChildren().addAll(label);
+				
 				
 				if (databases.getItems().isEmpty()) {
 					Label noDatabase = new Label("You don't have a database yet in this project, add one first");
@@ -227,7 +232,10 @@ public class CRUDCollectionManagerFactory implements CollectionManagerFactory {
 					root.getChildren().add(noDatabase);
 				}
 				else {
-					root.getChildren().add(EAIDeveloperUtils.newHBox("Database", databases));
+					Label chooseDb = new Label("Choose Database");
+					chooseDb.getStyleClass().add("p");
+					root.getChildren().addAll(chooseDb, databases);
+//					root.getChildren().add(EAIDeveloperUtils.newHBox("Database", databases));
 				}
 				
 				ScrollPane scroll = new ScrollPane();
@@ -346,7 +354,6 @@ public class CRUDCollectionManagerFactory implements CollectionManagerFactory {
 		Entry crudEntry = getCrudEntry(application);
 		Entry parent = databaseEntry.getParent();
 		String databaseName = parent.getName();
-		
 		Entry child = EAIDeveloperUtils.mkdir((RepositoryEntry) crudEntry, databaseName);
 		if (!child.isCollection()) {
 			Collection parentCollection = parent.getCollection();
@@ -355,7 +362,6 @@ public class CRUDCollectionManagerFactory implements CollectionManagerFactory {
 			if (parentCollection != null) {
 				collection.setName(parentCollection.getName());
 			}
-			collection.setSmallIcon("crud.png");
 			collection.setMediumIcon("crud-medium.png");
 			collection.setLargeIcon("crud-big.png");
 			collection.setSubType("crud");
@@ -366,7 +372,17 @@ public class CRUDCollectionManagerFactory implements CollectionManagerFactory {
 	}
 	
 	private Entry getCrudEntry(RepositoryEntry application) throws IOException {
-		Entry child = EAIDeveloperUtils.mkdir(application, "crud");
+		Entry child = EAIDeveloperUtils.mkdir(application, "interactions");
+		if (!child.isCollection()) {
+			CollectionImpl collection = new CollectionImpl();
+			collection.setName("Interactions");
+			collection.setType("folder");
+			collection.setSmallIcon("crud.png");
+			collection.setMediumIcon("crud-medium.png");
+			collection.setLargeIcon("crud-big.png");
+			((RepositoryEntry) child).setCollection(collection);
+			((RepositoryEntry) child).saveCollection();
+		}
 		return child;
 	}
 }

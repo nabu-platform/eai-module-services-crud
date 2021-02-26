@@ -467,12 +467,19 @@ public class CRUDArtifactGUIManager extends BaseJAXBGUIManager<CRUDConfiguration
 				}
 			});
 			ComboBox<String> field = newFieldCombo(foreignFields, coreType, true);
+			// if you have selected something that no longer exists
+			// we shall add an invalid class
+			if (!field.getItems().contains(filter.getKey())) {
+				field.getStyleClass().add("invalid");
+			}
 			field.getSelectionModel().select(filter.getKey());
 			field.getSelectionModel().selectedItemProperty().addListener(new ChangeListener<String>() {
 				@Override
 				public void changed(ObservableValue<? extends String> arg0, String arg1, String arg2) {
 					filter.setKey(arg2 == null || arg2.trim().isEmpty() ? null : arg2);
 					MainController.getInstance().setChanged();
+					// this assumes you can not select an invalid filter
+					field.getStyleClass().remove("invalid");
 				}
 			});
 			CheckBox input = new CheckBox();

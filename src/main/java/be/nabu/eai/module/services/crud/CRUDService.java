@@ -11,6 +11,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 
+import be.nabu.eai.module.services.crud.provider.CRUDMeta;
 import be.nabu.eai.module.web.application.WebApplication;
 import be.nabu.eai.module.web.application.WebFragment;
 import be.nabu.eai.module.web.application.api.PermissionWithRole;
@@ -43,6 +44,7 @@ import be.nabu.libs.types.base.ComplexElementImpl;
 import be.nabu.libs.types.base.SimpleElementImpl;
 import be.nabu.libs.types.base.ValueImpl;
 import be.nabu.libs.types.mask.MaskedContent;
+import be.nabu.libs.types.properties.CommentProperty;
 import be.nabu.libs.types.properties.GeneratedProperty;
 import be.nabu.libs.types.properties.MaxOccursProperty;
 import be.nabu.libs.types.properties.MinOccursProperty;
@@ -287,6 +289,7 @@ public class CRUDService implements DefinedService, WebFragment, RESTFragment, A
 						serviceInput.set("limit", input == null ? null : input.get("limit"));
 						serviceInput.set("offset", input == null ? null : input.get("offset"));
 						serviceInput.set("orderBy", input == null ? null : input.get("orderBy"));
+						serviceInput.set("limitToUser", input == null ? null : input.get("limitToUser"));
 						List<Filter> filters = new ArrayList<Filter>();
 						if (artifact.getConfig().getFilters() != null) {
 							transformFilters(artifact.getConfig().getFilters(), input, filters);
@@ -294,6 +297,8 @@ public class CRUDService implements DefinedService, WebFragment, RESTFragment, A
 						serviceInput.set("filters", filters);
 					break;
 				}
+				
+				serviceInput.set("meta", getMeta());
 				
 				ServiceRuntime runtime = new ServiceRuntime(service, executionContext);
 				ComplexContent serviceOutput = runtime.run(serviceInput);
@@ -325,6 +330,12 @@ public class CRUDService implements DefinedService, WebFragment, RESTFragment, A
 			}
 
 		};
+	}
+	
+	private CRUDMeta getMeta() {
+		CRUDMeta meta = new CRUDMeta();
+		meta.setPermissionAction(getPermissionAction());
+		return meta;
 	}
 	
 	@SuppressWarnings("unchecked")
@@ -449,6 +460,7 @@ public class CRUDService implements DefinedService, WebFragment, RESTFragment, A
 					input.add(new SimpleElementImpl<Integer>("limit", SimpleTypeWrapperFactory.getInstance().getWrapper().wrap(Integer.class), input, new ValueImpl<Integer>(MinOccursProperty.getInstance(), 0)));
 					input.add(new SimpleElementImpl<Long>("offset", SimpleTypeWrapperFactory.getInstance().getWrapper().wrap(Long.class), input, new ValueImpl<Integer>(MinOccursProperty.getInstance(), 0)));
 					input.add(new SimpleElementImpl<String>("orderBy", SimpleTypeWrapperFactory.getInstance().getWrapper().wrap(String.class), input, new ValueImpl<Integer>(MinOccursProperty.getInstance(), 0), new ValueImpl<Integer>(MaxOccursProperty.getInstance(), 0)));
+					input.add(new SimpleElementImpl<Boolean>("limitToUser", SimpleTypeWrapperFactory.getInstance().getWrapper().wrap(Boolean.class), input, new ValueImpl<Integer>(MinOccursProperty.getInstance(), 0), new ValueImpl<String>(CommentProperty.getInstance(), "If you enable this, the provider should try to limit the result set to data that the current user is allowed to see")));
 					if (artifact.getConfig().getFilters() != null) {
 						Structure filters = new Structure();
 						filters.setName("filter");
@@ -788,6 +800,10 @@ public class CRUDService implements DefinedService, WebFragment, RESTFragment, A
 						Element<?> element = singleOutput.get(filter.getKey());
 						if (element == null) {
 							element = ((ComplexType) artifact.getConfig().getCoreType()).get(filter.getKey());
+						}
+						// you might be referencing an item that no longer exists
+						if (element == null) {
+							continue;
 						}
 						SimpleElementImpl childElement = new SimpleElementImpl(filter.getAlias() == null ? filter.getKey() : filter.getAlias(), (SimpleType<?>) element.getType(), input, new ValueImpl<Integer>(MinOccursProperty.getInstance(), 0));
 						// only for some filters do we support the list entries
