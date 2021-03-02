@@ -33,6 +33,8 @@ public class CRUDConfiguration {
 			this.localName = localName;
 		}
 	}
+	
+	private List<CRUDView> views;
 
 	private boolean allowHeaderAsQueryParameter = true;
 	
@@ -210,4 +212,11 @@ public class CRUDConfiguration {
 		this.allowHeaderAsQueryParameter = allowHeaderAsQueryParameter;
 	}
 	
+	public List<CRUDView> getViews() {
+		return views;
+	}
+	public void setViews(List<CRUDView> views) {
+		this.views = views;
+	}
+
 }

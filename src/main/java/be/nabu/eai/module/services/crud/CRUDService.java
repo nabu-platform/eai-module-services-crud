@@ -257,7 +257,7 @@ public class CRUDService implements DefinedService, WebFragment, RESTFragment, A
 							return null;
 						}
 						serviceInput = artifact.getConfig().getProvider().getConfig().getListService().getServiceInterface().getInputDefinition().newInstance();
-						serviceInput.set("typeId", artifact.getConfig().getCoreType().getId());
+						serviceInput.set("typeId", singleOutput.getId());
 						serviceInput.set("connectionId", connectionId);
 						serviceInput.set("transactionId", transactionId);
 						if (artifact.getConfig().isUseLanguage()) {
@@ -516,7 +516,11 @@ public class CRUDService implements DefinedService, WebFragment, RESTFragment, A
 	
 	protected Element<?> getSecurityContext() {
 		if (artifact.getConfig().getSecurityContextField() != null) {
-			return ((ComplexType) artifact.getConfig().getCoreType()).get(artifact.getConfig().getSecurityContextField());
+			Element<?> element = ((ComplexType) artifact.getConfig().getCoreType()).get(artifact.getConfig().getSecurityContextField());
+			if (element == null && (type == CRUDType.LIST || type == CRUDType.GET) && singleOutput != null) {
+				element = singleOutput.get(artifact.getConfig().getSecurityContextField());
+			}
+			return element;
 		}
 		return null;
 	}

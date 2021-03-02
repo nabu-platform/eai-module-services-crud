@@ -58,7 +58,6 @@ import javafx.scene.control.ScrollPane;
 import javafx.scene.control.SplitPane;
 import javafx.scene.control.TextField;
 import javafx.scene.control.TitledPane;
-import javafx.scene.control.ScrollPane.ScrollBarPolicy;
 import javafx.scene.input.MouseEvent;
 import javafx.scene.layout.AnchorPane;
 import javafx.scene.layout.HBox;
@@ -114,7 +113,7 @@ public class CRUDArtifactGUIManager extends BaseJAXBGUIManager<CRUDConfiguration
 	@Override
 	protected List<String> getBlacklistedProperties() {
 		return Arrays.asList("createBlacklistFields", "updateBlacklistFields", "listBlacklistFields", "updateRegenerateFields",
-				"securityContextField", "parentField", "filters", "foreignFields", "coreType");
+				"securityContextField", "parentField", "filters", "foreignFields", "coreType", "views");
 	}
 
 	@Override
@@ -266,7 +265,7 @@ public class CRUDArtifactGUIManager extends BaseJAXBGUIManager<CRUDConfiguration
 		main.setFillWidth(true);
 		
 		// select the security context field
-		ComboBox<String> securityContextField = newFieldCombo(instance.getConfig().getForeignFields(), instance.getConfig().getCoreType(), false);
+		ComboBox<String> securityContextField = newFieldCombo(instance.getConfig().getForeignFields(), instance.getConfig().getCoreType(), true);
 		securityContextField.getSelectionModel().select(instance.getConfig().getSecurityContextField());
 		securityContextField.getSelectionModel().selectedItemProperty().addListener(new ChangeListener<String>() {
 			@Override
