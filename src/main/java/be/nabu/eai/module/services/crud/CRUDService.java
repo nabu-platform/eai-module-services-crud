@@ -11,6 +11,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 
+import be.nabu.eai.module.services.crud.api.CRUDListAction;
 import be.nabu.eai.module.services.crud.provider.CRUDMeta;
 import be.nabu.eai.module.web.application.WebApplication;
 import be.nabu.eai.module.web.application.WebFragment;
@@ -75,6 +76,7 @@ public class CRUDService implements DefinedService, WebFragment, RESTFragment, A
 	private DefinedStructure singleOutput;
 	private DefinedStructure createOutput;
 	private DefinedStructure updateOutput;
+	private CRUDListAction listAction;
 	
 	public enum CRUDType {
 		CREATE,
@@ -84,7 +86,8 @@ public class CRUDService implements DefinedService, WebFragment, RESTFragment, A
 		GET
 	}
 
-	public CRUDService(CRUDArtifact artifact, String id, CRUDType type, DefinedStructure createInput, DefinedStructure updateInput, DefinedStructure outputList, DefinedStructure updateIntermediaryInput, DefinedStructure singleOutput, DefinedStructure createOutput, DefinedStructure updateOutput) {
+	public CRUDService(CRUDArtifact artifact, String id, CRUDType type, DefinedStructure createInput, DefinedStructure updateInput, DefinedStructure outputList, DefinedStructure updateIntermediaryInput, DefinedStructure singleOutput, DefinedStructure createOutput, DefinedStructure updateOutput,
+			CRUDListAction listAction) {
 		this.artifact = artifact;
 		this.id = id;
 		this.type = type;
@@ -95,6 +98,7 @@ public class CRUDService implements DefinedService, WebFragment, RESTFragment, A
 		this.singleOutput = singleOutput;
 		this.createOutput = createOutput;
 		this.updateOutput = updateOutput;
+		this.listAction = listAction;
 	}
 	
 	@Override
@@ -291,8 +295,8 @@ public class CRUDService implements DefinedService, WebFragment, RESTFragment, A
 						serviceInput.set("orderBy", input == null ? null : input.get("orderBy"));
 						serviceInput.set("limitToUser", input == null ? null : input.get("limitToUser"));
 						List<Filter> filters = new ArrayList<Filter>();
-						if (artifact.getConfig().getFilters() != null) {
-							transformFilters(artifact.getConfig().getFilters(), input, filters);
+						if (listAction.getFilters() != null) {
+							transformFilters(listAction.getFilters(), input, filters);
 						}
 						serviceInput.set("filters", filters);
 					break;
@@ -461,10 +465,10 @@ public class CRUDService implements DefinedService, WebFragment, RESTFragment, A
 					input.add(new SimpleElementImpl<Long>("offset", SimpleTypeWrapperFactory.getInstance().getWrapper().wrap(Long.class), input, new ValueImpl<Integer>(MinOccursProperty.getInstance(), 0)));
 					input.add(new SimpleElementImpl<String>("orderBy", SimpleTypeWrapperFactory.getInstance().getWrapper().wrap(String.class), input, new ValueImpl<Integer>(MinOccursProperty.getInstance(), 0), new ValueImpl<Integer>(MaxOccursProperty.getInstance(), 0)));
 					input.add(new SimpleElementImpl<Boolean>("limitToUser", SimpleTypeWrapperFactory.getInstance().getWrapper().wrap(Boolean.class), input, new ValueImpl<Integer>(MinOccursProperty.getInstance(), 0), new ValueImpl<String>(CommentProperty.getInstance(), "If you enable this, the provider should try to limit the result set to data that the current user is allowed to see")));
-					if (artifact.getConfig().getFilters() != null) {
+					if (listAction.getFilters() != null) {
 						Structure filters = new Structure();
 						filters.setName("filter");
-						for (CRUDFilter filter : artifact.getConfig().getFilters()) {
+						for (CRUDFilter filter : listAction.getFilters()) {
 							if (filter.isInput()) {
 								Element<?> element = ((ComplexType) artifact.getConfig().getCoreType()).get(filter.getKey());
 								// if the element does not exist in the core type, it may have been added via foreign fields
@@ -610,11 +614,11 @@ public class CRUDService implements DefinedService, WebFragment, RESTFragment, A
 			case DELETE: 
 				return name + ".delete";
 			case LIST:
-				return name + ".list";
+				return name + ".list" + (listAction.getName() == null ? "" : listAction.getName().substring(0, 1).toUpperCase() + listAction.getName().substring(1));
 			case UPDATE:
 				return name + ".update";
 			case GET:
-				return name + ".get";
+				return name + ".get" + (listAction.getName() == null ? "" : listAction.getName().substring(0, 1).toUpperCase() + listAction.getName().substring(1));
 		}
 		return null;
 	}
@@ -622,27 +626,26 @@ public class CRUDService implements DefinedService, WebFragment, RESTFragment, A
 	@Override
 	public List<Permission> getPermissions(WebApplication artifact, String path) {
 		List<Permission> permissions = new ArrayList<Permission>();
-		String name = getName();
 		switch (type) {
 			case CREATE:
-				permissions.add(new PermissionImplementation(null, name + ".create", this.artifact.getConfig().getCreateRole()));
+				permissions.add(new PermissionImplementation(null, getPermissionAction(), this.artifact.getConfig().getCreateRole()));
 			break;
 			case DELETE: 
-				permissions.add(new PermissionImplementation(null, name + ".delete", this.artifact.getConfig().getDeleteRole()));
+				permissions.add(new PermissionImplementation(null, getPermissionAction(), this.artifact.getConfig().getDeleteRole()));
 			break;
 			case LIST:
-				permissions.add(new PermissionImplementation(null, name + ".list", this.artifact.getConfig().getListRole()));
+				permissions.add(new PermissionImplementation(null, getPermissionAction(), this.artifact.getConfig().getListRole()));
 			break;
 			case UPDATE:
-				permissions.add(new PermissionImplementation(null, name + ".update", this.artifact.getConfig().getUpdateRole()));
+				permissions.add(new PermissionImplementation(null, getPermissionAction(), this.artifact.getConfig().getUpdateRole()));
 			break;
 			case GET:
-				permissions.add(new PermissionImplementation(null, name + ".get", this.artifact.getConfig().getListRole()));
+				permissions.add(new PermissionImplementation(null, getPermissionAction(), this.artifact.getConfig().getListRole()));
 			break;
 		}
 		return permissions;
 	}
-
+	
 	@Override
 	public boolean isStarted(WebApplication artifact, String path) {
 		return subscriptions.containsKey(getKey(artifact, path));
@@ -728,8 +731,8 @@ public class CRUDService implements DefinedService, WebFragment, RESTFragment, A
 
 	public boolean hasSecurityContextFilter() {
 		boolean hasParent = false;
-		if (artifact.getConfig().getFilters() != null && artifact.getConfig().getSecurityContextField() != null) {
-			for (CRUDFilter filter : artifact.getConfig().getFilters()) {
+		if (listAction.getFilters() != null && artifact.getConfig().getSecurityContextField() != null) {
+			for (CRUDFilter filter : listAction.getFilters()) {
 				if (artifact.getConfig().getSecurityContextField().equals(filter.getKey()) && "=".equals(filter.getOperator())) {
 					hasParent = true;
 					break;
@@ -792,9 +795,9 @@ public class CRUDService implements DefinedService, WebFragment, RESTFragment, A
 			if (artifact.getConfig().isUseLanguage() && artifact.getConfig().isUseExplicitLanguage()) {
 				parameters.add(new SimpleElementImpl<String>("language", SimpleTypeWrapperFactory.getInstance().getWrapper().wrap(String.class), input, new ValueImpl<Integer>(MinOccursProperty.getInstance(), 0)));
 			}
-			if (artifact.getConfig().getFilters() != null) {
+			if (listAction.getFilters() != null) {
 				Element<?> parent = getSecurityContext();
-				for (CRUDFilter filter : artifact.getConfig().getFilters()) {
+				for (CRUDFilter filter : listAction.getFilters()) {
 					if (filter.isInput()) {
 						// if we have a list service which has a parent id filter, we put it in the path, not in the query
 						if (parent != null && parent.getName().equals(filter.getKey())) {

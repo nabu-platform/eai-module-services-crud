@@ -4,8 +4,9 @@ import java.util.List;
 
 import be.nabu.eai.module.services.crud.CRUDConfiguration.ForeignNameField;
 import be.nabu.eai.module.services.crud.CRUDService.CRUDType;
+import be.nabu.eai.module.services.crud.api.CRUDListAction;
 
-public class CRUDView {
+public class CRUDView implements CRUDListAction {
 	private List<String> roles;
 	private List<CRUDFilter> filters;
 	private List<ForeignNameField> foreignFields;

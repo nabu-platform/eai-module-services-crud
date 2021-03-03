@@ -18,6 +18,8 @@ import be.nabu.eai.developer.managers.base.BaseArtifactGUIInstance;
 import be.nabu.eai.developer.managers.base.BaseJAXBGUIManager;
 import be.nabu.eai.developer.managers.util.SimpleProperty;
 import be.nabu.eai.module.services.crud.CRUDConfiguration.ForeignNameField;
+import be.nabu.eai.module.services.crud.CRUDService.CRUDType;
+import be.nabu.eai.module.services.crud.api.CRUDListAction;
 import be.nabu.eai.module.services.crud.provider.CRUDProviderArtifact;
 import be.nabu.eai.repository.EAIResourceRepository;
 import be.nabu.eai.repository.api.Entry;
@@ -99,6 +101,11 @@ public class CRUDArtifactGUIManager extends BaseJAXBGUIManager<CRUDConfiguration
 			}
 		}
 		artifact.getConfig().setProvider((CRUDProviderArtifact) entry.getRepository().resolve("nabu.services.crud.provider.basic.provider"));
+		List<String> asList = Arrays.asList("$user");
+		artifact.getConfig().setListRole(new ArrayList<String>(asList));
+		artifact.getConfig().setCreateRole(new ArrayList<String>(asList));
+		artifact.getConfig().setUpdateRole(new ArrayList<String>(asList));
+		artifact.getConfig().setDeleteRole(new ArrayList<String>(asList));
 		if (artifact.getConfig().getCoreType() == null) {
 			throw new IllegalStateException("You need to define a type");
 		}
@@ -158,11 +165,24 @@ public class CRUDArtifactGUIManager extends BaseJAXBGUIManager<CRUDConfiguration
 		TitledPane general = new TitledPane("Advanced", box);
 		
 		AnchorPane listPane = new AnchorPane();
-		populateList(instance, listPane);
+		populateList(instance, instance.asListAction(), listPane);
 		listPane.getStyleClass().add("configuration-pane");
 		listPane.getStyleClass().add("configuration-pane-basic");
 		TitledPane list = new TitledPane("List", listPane);
 		accordion.getPanes().add(list);
+		
+		if (instance.getConfig().getViews() != null) {
+			for (CRUDView view : instance.getConfig().getViews()) {
+				if (CRUDType.LIST.equals(view.getType())) {
+					AnchorPane viewPane = new AnchorPane();
+					populateList(instance, view, viewPane);
+					viewPane.getStyleClass().add("configuration-pane");
+					viewPane.getStyleClass().add("configuration-pane-basic");
+					TitledPane viewList = new TitledPane("List " + view.getName(), viewPane);
+					accordion.getPanes().add(viewList);
+				}
+			}
+		}
 		
 		AnchorPane createPane = new AnchorPane();
 		populateCreate(instance, createPane);
@@ -375,21 +395,25 @@ public class CRUDArtifactGUIManager extends BaseJAXBGUIManager<CRUDConfiguration
 		}
 	}
 	
-	private void populateList(CRUDArtifact instance, Pane list) {
+	private void populateList(CRUDArtifact artifact, CRUDListAction instance, Pane list) {
 		VBox main = new VBox();
 		main.setPadding(new Insets(10));
 		list.getChildren().add(main);
 		
-		if (instance.getConfig().getFilters() == null) {
-			instance.getConfig().setFilters(new ArrayList<CRUDFilter>());
+		if (instance.getFilters() == null) {
+			instance.setFilters(new ArrayList<CRUDFilter>());
+		}
+		
+		if (instance.getForeignFields() == null) {
+			instance.setForeignFields(new ArrayList<ForeignNameField>());
 		}
 		
 		Label label;
-		drawFilters(instance.getConfig().getForeignFields(), instance.getConfig().getCoreType(), instance.getConfig().getFilters(), main, new Redrawer() {
+		drawFilters(instance.getForeignFields(), artifact.getConfig().getCoreType(), instance.getFilters(), main, new Redrawer() {
 			@Override
 			public void redraw() {
 				list.getChildren().clear();
-				populateList(instance, list);				
+				populateList(artifact, instance, list);				
 			}
 		}, true);
 
@@ -404,14 +428,14 @@ public class CRUDArtifactGUIManager extends BaseJAXBGUIManager<CRUDConfiguration
 		label = new Label("Choose the fields you want to blacklist from the resultset:");
 		label.getStyleClass().add("p");
 		fields.getChildren().add(label);
-		if (instance.getConfig().getListBlacklistFields() == null) {
-			instance.getConfig().setListBlacklistFields(new ArrayList<String>());
+		if (instance.getBlacklistFields() == null) {
+			instance.setBlacklistFields(new ArrayList<String>());
 		}
-		populateChecklist(instance, fields, instance.getConfig().getListBlacklistFields(), new ArrayList<String>(), false);
+		populateChecklist(artifact, fields, instance.getBlacklistFields(), new ArrayList<String>(), false);
 		
 		VBox foreign = new VBox();
 		foreign.getStyleClass().add("section");
-		drawForeignNameFields(instance.getConfig().getForeignFields(), instance.getConfig().getCoreType(), instance.getRepository(), foreign);
+		drawForeignNameFields(instance.getForeignFields(), artifact.getConfig().getCoreType(), artifact.getRepository(), foreign);
 		if (!foreign.getChildren().isEmpty()) {
 			main.getChildren().add(foreign);
 		}
