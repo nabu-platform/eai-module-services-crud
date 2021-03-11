@@ -101,6 +101,10 @@ public class CRUDService implements DefinedService, WebFragment, RESTFragment, A
 		this.listAction = listAction;
 	}
 	
+	public List<CRUDFilter> getFilters() {
+		return listAction.getFilters();
+	}
+
 	@Override
 	public ServiceInterface getServiceInterface() {
 		return new ServiceInterface() {
@@ -183,6 +187,10 @@ public class CRUDService implements DefinedService, WebFragment, RESTFragment, A
 								// if we have a date, we initiate it as "current", we assume something like created or modified
 								else if (Date.class.isAssignableFrom(((SimpleType<?>) element.getType()).getInstanceClass())) {
 									createInstance.set(element.getName(), new Date());
+								}
+								// booleans are false by default
+								else if (Boolean.class.isAssignableFrom(((SimpleType<?>) element.getType()).getInstanceClass())) {
+									createInstance.set(element.getName(), false);
 								}
 							}
 						}
@@ -319,6 +327,13 @@ public class CRUDService implements DefinedService, WebFragment, RESTFragment, A
 							if (result.getTotalRowCount() != null) {
 								output.set("page", Page.build(result.getTotalRowCount(), input == null ? null : (Long) input.get("offset"), input == null ? null : (Integer) input.get("limit")));
 							}
+							else {
+								Long rowCount = result.getRowCount();
+								if (rowCount == null) {
+									rowCount = result.getResults() != null ? result.getResults().size() : 0l;
+								}
+								output.set("page", Page.build(rowCount, 0l, rowCount.intValue()));
+							}
 						}
 					break;
 					case GET:
@@ -339,6 +354,10 @@ public class CRUDService implements DefinedService, WebFragment, RESTFragment, A
 	private CRUDMeta getMeta() {
 		CRUDMeta meta = new CRUDMeta();
 		meta.setPermissionAction(getPermissionAction());
+		Element<?> securityContext = getSecurityContext();
+		if (securityContext != null) {
+			meta.setSecurityField(securityContext.getName());
+		}
 		return meta;
 	}
 	
@@ -605,6 +624,15 @@ public class CRUDService implements DefinedService, WebFragment, RESTFragment, A
 		}
 	}
 	
+	public void unsubscribeAll() {
+		synchronized(subscriptions) {
+			for (EventSubscription<?, ?> sub : subscriptions.values()) {
+				sub.unsubscribe();
+			}
+			subscriptions.clear();
+		}
+	}
+	
 	@Override
 	public String getPermissionAction() {
 		String name = getName();
@@ -614,11 +642,11 @@ public class CRUDService implements DefinedService, WebFragment, RESTFragment, A
 			case DELETE: 
 				return name + ".delete";
 			case LIST:
-				return name + ".list" + (listAction.getName() == null ? "" : listAction.getName().substring(0, 1).toUpperCase() + listAction.getName().substring(1));
+				return name + ".list" + (listAction.getName() == null ? "" : CRUDArtifactManager.getViewName(listAction.getName()));
 			case UPDATE:
 				return name + ".update";
 			case GET:
-				return name + ".get" + (listAction.getName() == null ? "" : listAction.getName().substring(0, 1).toUpperCase() + listAction.getName().substring(1));
+				return name + ".get" + (listAction.getName() == null ? "" : CRUDArtifactManager.getViewName(listAction.getName()));
 		}
 		return null;
 	}
@@ -707,12 +735,16 @@ public class CRUDService implements DefinedService, WebFragment, RESTFragment, A
 		if (!path.isEmpty() && !path.endsWith("/")) { 
 			path += "/";
 		}
+		// we don't want to start a new subpath, it is likely matched by id for get etc
+		// instead it should be something along the lines of "organisationTest" or whatever
+		String suffix = listAction != null && listAction.getName() != null ? CRUDArtifactManager.getViewName(listAction.getName()) : "";
+		
 		switch(type) {
 			case GET:
 			case UPDATE:
 			case DELETE:
 				// if we have a security context and the id is not a valid one, add it
-				return path + (getSecurityContext() != null && !artifact.getConfig().getProvider().isPrimaryKeySecurityContext() ? "{contextId}/" : "") + getName() + "/{id}";
+				return path + (getSecurityContext() != null && !artifact.getConfig().getProvider().isPrimaryKeySecurityContext() ? "{contextId}/" : "") + getName() + suffix + "/{id}";
 			case CREATE:
 				if (getSecurityContext() != null) {
 					path += "{contextId}/";
@@ -725,7 +757,7 @@ public class CRUDService implements DefinedService, WebFragment, RESTFragment, A
 					path += "{contextId}/";
 				}
 				path += getName();
-				return path;
+				return path + suffix;
 		}
 	}
 

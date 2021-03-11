@@ -4,7 +4,6 @@ import java.util.ArrayList;
 import java.util.List;
 
 import be.nabu.eai.module.services.crud.CRUDConfiguration.ForeignNameField;
-import be.nabu.eai.module.services.crud.CRUDService.CRUDType;
 import be.nabu.eai.module.services.crud.api.CRUDListAction;
 import be.nabu.eai.module.web.application.MountableWebFragmentProvider;
 import be.nabu.eai.module.web.application.WebFragment;

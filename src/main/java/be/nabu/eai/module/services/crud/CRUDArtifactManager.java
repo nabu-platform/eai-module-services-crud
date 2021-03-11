@@ -1,9 +1,11 @@
 package be.nabu.eai.module.services.crud;
 
 import java.io.IOException;
+import java.text.ParseException;
 import java.util.ArrayList;
 import java.util.List;
 
+import be.nabu.eai.api.NamingConvention;
 import be.nabu.eai.module.services.crud.CRUDConfiguration.ForeignNameField;
 import be.nabu.eai.module.services.crud.CRUDService.CRUDType;
 import be.nabu.eai.module.services.crud.provider.CRUDProviderArtifact;
@@ -18,7 +20,6 @@ import be.nabu.eai.repository.resources.MemoryEntry;
 import be.nabu.libs.artifacts.api.Artifact;
 import be.nabu.libs.property.api.Value;
 import be.nabu.libs.resources.api.ResourceContainer;
-import be.nabu.libs.services.api.DefinedService;
 import be.nabu.libs.types.TypeUtils;
 import be.nabu.libs.types.api.ComplexType;
 import be.nabu.libs.types.api.DefinedType;
@@ -174,7 +175,7 @@ public class CRUDArtifactManager extends JAXBArtifactManager<CRUDConfiguration, 
 					switch(view.getType()) {
 						case LIST:
 							if (artifact.getConfig().getProvider() != null && artifact.getConfig().getProvider().getConfig().getListService() != null) {
-								String name = view.getName().substring(0, 1).toUpperCase() + view.getName().substring(1);
+								String name = getViewName(view.getName());
 								List<String> blacklist = view.getBlacklistFields();
 								// let's add to that
 								blacklist = blacklist == null ? new ArrayList<String>() : new ArrayList<String>(blacklist);
@@ -214,6 +215,10 @@ public class CRUDArtifactManager extends JAXBArtifactManager<CRUDConfiguration, 
 			
 		}
 		return entries;
+	}
+	
+	public static String getViewName(String name) {
+		return NamingConvention.UPPER_CAMEL_CASE.apply(NamingConvention.UNDERSCORE.apply(name));
 	}
 
 	public static List<String> injectForeignFields(List<ForeignNameField> foreignFields, DefinedType coreType, Repository repository, Structure output) {
@@ -299,9 +304,9 @@ public class CRUDArtifactManager extends JAXBArtifactManager<CRUDConfiguration, 
 		return generated;
 	}
 	
-	private void addChild(CRUDArtifact artifact, List<Entry> entries, ModifiableEntry services, String name, DefinedService service, String prettyName) {
+	private void addChild(CRUDArtifact artifact, List<Entry> entries, ModifiableEntry services, String name, CRUDService service, String prettyName) {
 		EAINode node = new EAINode();
-		node.setArtifactClass(DefinedService.class);
+		node.setArtifactClass(service.getClass());
 		node.setArtifact(service);
 		node.setLeaf(true);
 		node.setName(prettyName);
@@ -371,6 +376,17 @@ public class CRUDArtifactManager extends JAXBArtifactManager<CRUDConfiguration, 
 		entries.add(services);
 		entries.add(structures);
 		parent.removeChildren("services", "types");
+		for (Entry single : entries) {
+			if (single.isNode() && CRUDService.class.isAssignableFrom(single.getNode().getArtifactClass())) {
+				try {
+					((CRUDService) single.getNode().getArtifact()).unsubscribeAll();
+				}
+				catch (ParseException e) {
+					// we tried :(
+					e.printStackTrace();
+				}
+			}
+		}
 		return entries;
 	}
 	

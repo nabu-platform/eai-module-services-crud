@@ -305,10 +305,10 @@ public class CRUDListener implements EventHandler<HTTPRequest, HTTPResponse> {
 		String context = null;
 		String parentQueryName = null;
 		if (CRUDType.LIST.equals(service.getType())) {
-			if (artifact.getConfig().getFilters() != null) {
+			if (service.getFilters() != null) {
 				Element<?> securityContext = service.getSecurityContext();
 				if (securityContext != null) {
-					for (CRUDFilter filter : artifact.getConfig().getFilters()) {
+					for (CRUDFilter filter : service.getFilters()) {
 						if (securityContext.getName().equals(filter.getKey())) {
 							parentQueryName = filter.getAlias() == null ? filter.getKey() : filter.getAlias();
 							break;
@@ -410,8 +410,8 @@ public class CRUDListener implements EventHandler<HTTPRequest, HTTPResponse> {
 				if (artifact.getConfig().isUseLanguage() && chosenLanguage != null) {
 					input.set("language", chosenLanguage);
 				}
-				if (artifact.getConfig().getFilters() != null) {
-					for (CRUDFilter filter : artifact.getConfig().getFilters()) {
+				if (service.getFilters() != null) {
+					for (CRUDFilter filter : service.getFilters()) {
 						if (filter.isInput()) {
 							List<String> list = queryProperties.get(filter.getAlias() == null ? filter.getKey() : filter.getAlias());
 							if (list != null && !list.isEmpty()) {
