@@ -127,7 +127,7 @@ public class CRUDArtifactManager extends JAXBArtifactManager<CRUDConfiguration, 
 				blacklist.clear();
 				blacklist.addAll(primary);
 				// generate the input
-				updateInput = addChild(artifact, entries, types, "updateInput", updateOutput, blacklist);
+				updateInput = addChild(artifact, entries, types, "updateInput", updateFullInput, blacklist);
 				synchronize(updateInput, (ComplexType) artifact.getConfig().getCoreType());
 			}
 			DefinedStructure output = null;
