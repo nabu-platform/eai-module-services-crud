@@ -527,7 +527,7 @@ public class CRUDService implements DefinedService, WebFragment, RESTFragment, A
 		return input;
 	}
 	
-	private Element<?> getPrimary(ComplexType parent) {
+	static Element<?> getPrimary(ComplexType parent) {
 		for (Element<?> element : TypeUtils.getAllChildren(parent)) {
 			Value<Boolean> property = element.getProperty(PrimaryKeyProperty.getInstance());
 			if (property != null && property.getValue() != null && property.getValue()) {

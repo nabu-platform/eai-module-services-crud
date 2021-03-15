@@ -20,6 +20,7 @@ import be.nabu.eai.repository.resources.MemoryEntry;
 import be.nabu.libs.artifacts.api.Artifact;
 import be.nabu.libs.property.api.Value;
 import be.nabu.libs.resources.api.ResourceContainer;
+import be.nabu.libs.services.api.DefinedService;
 import be.nabu.libs.types.TypeUtils;
 import be.nabu.libs.types.api.ComplexType;
 import be.nabu.libs.types.api.DefinedType;
@@ -61,7 +62,7 @@ public class CRUDArtifactManager extends JAXBArtifactManager<CRUDConfiguration, 
 		// create the types
 		if (artifact.getConfig().getCoreType() != null) {
 			ModifiableEntry types = EAIRepositoryUtils.getParent(parent, "types", true);
-			DefinedStructure createInput = null, updateInput = null, outputList = null, updateIntermediaryInput = null, createOutput = null, updateOutput = null;
+			DefinedStructure createInput = null, updateInput = null, updateFullInput = null, outputList = null, updateIntermediaryInput = null, createOutput = null, updateOutput = null;
 			// if we have a provider with a create, add it
 			List<String> primary = getPrimary((ComplexType) artifact.getConfig().getCoreType());
 			if (artifact.getConfig().getProvider() != null && artifact.getConfig().getProvider().getConfig().getCreateService() != null) {
@@ -112,13 +113,19 @@ public class CRUDArtifactManager extends JAXBArtifactManager<CRUDConfiguration, 
 					blacklist.addAll(provider.getConfig().getBlacklistedFields());
 				}
 				updateOutput = addChild(artifact, entries, types, "updateOutput", updateIntermediaryInput, new ArrayList<String>(blacklist));
+				synchronize(updateOutput, (ComplexType) artifact.getConfig().getCoreType());
 				
 				blacklist.clear();
-				blacklist.addAll(primary);
 				// blacklist the fields we regenerate
 				if (artifact.getConfig().getUpdateRegenerateFields() != null) {
 					blacklist.addAll(artifact.getConfig().getUpdateRegenerateFields());
 				}
+				// the full input _with_ the primary, this can be used for example for the batch services
+				updateFullInput = addChild(artifact, entries, types, "updateFullInput", updateOutput, blacklist);
+				synchronize(updateFullInput, (ComplexType) artifact.getConfig().getCoreType());
+				
+				blacklist.clear();
+				blacklist.addAll(primary);
 				// generate the input
 				updateInput = addChild(artifact, entries, types, "updateInput", updateOutput, blacklist);
 				synchronize(updateInput, (ComplexType) artifact.getConfig().getCoreType());
@@ -154,11 +161,14 @@ public class CRUDArtifactManager extends JAXBArtifactManager<CRUDConfiguration, 
 			
 			// note that we can only add update services & list services if we have a primary key
 			ModifiableEntry services = EAIRepositoryUtils.getParent(parent, "services", true);
+			ModifiableEntry batchServices = EAIRepositoryUtils.getParent(parent, "batch", true);
 			if (artifact.getConfig().getProvider() != null && artifact.getConfig().getProvider().getConfig().getCreateService() != null) {
 				addChild(artifact, entries, services, "create", new CRUDService(artifact, services.getId() + ".create", CRUDType.CREATE, createInput, updateInput, outputList, updateIntermediaryInput, output, createOutput, updateOutput, null), "Create");
 			}
 			if (!primary.isEmpty() && artifact.getConfig().getProvider() != null && artifact.getConfig().getProvider().getConfig().getUpdateService() != null) {
 				addChild(artifact, entries, services, "update", new CRUDService(artifact, services.getId() + ".update", CRUDType.UPDATE, createInput, updateInput, outputList, updateIntermediaryInput, output, createOutput, updateOutput, null), "Update");
+				// add the batch update service
+				addChild(artifact, entries, batchServices, "updateAll", new CRUDBatchService(artifact, batchServices.getId() + ".updateAll", CRUDType.UPDATE, updateFullInput, updateIntermediaryInput, updateOutput), "Update All");
 			}
 			if (artifact.getConfig().getProvider() != null && artifact.getConfig().getProvider().getConfig().getListService() != null) {
 				addChild(artifact, entries, services, "list", new CRUDService(artifact, services.getId() + ".list", CRUDType.LIST, createInput, updateInput, outputList, updateIntermediaryInput, output, createOutput, updateOutput, artifact.asListAction()), "List");
@@ -168,6 +178,7 @@ public class CRUDArtifactManager extends JAXBArtifactManager<CRUDConfiguration, 
 			}
 			if (!primary.isEmpty() && artifact.getConfig().getProvider() != null && artifact.getConfig().getProvider().getConfig().getDeleteService() != null) {
 				addChild(artifact, entries, services, "delete", new CRUDService(artifact, services.getId() + ".delete", CRUDType.DELETE, createInput, updateInput, outputList, updateIntermediaryInput, output, createOutput, updateOutput, null), "Delete");
+				addChild(artifact, entries, batchServices, "deleteAll", new CRUDBatchService(artifact, batchServices.getId() + ".deleteAll", CRUDType.DELETE, updateFullInput, updateIntermediaryInput, updateOutput), "Delete All");
 			}
 			
 			if (artifact.getConfig().getViews() != null) {
@@ -263,6 +274,9 @@ public class CRUDArtifactManager extends JAXBArtifactManager<CRUDConfiguration, 
 				if (optional) {
 					clone.setProperty(new ValueImpl<Integer>(MinOccursProperty.getInstance(), 0));
 				}
+				// explicitly set primary key to false, we can't inject other primary keys
+				// otherwise binding logic building on top of this document might get confused
+				clone.setProperty(new ValueImpl<Boolean>(PrimaryKeyProperty.getInstance(), false));
 				output.add(clone);
 				fields.add(clone.getName());
 			}
@@ -304,7 +318,7 @@ public class CRUDArtifactManager extends JAXBArtifactManager<CRUDConfiguration, 
 		return generated;
 	}
 	
-	private void addChild(CRUDArtifact artifact, List<Entry> entries, ModifiableEntry services, String name, CRUDService service, String prettyName) {
+	private void addChild(CRUDArtifact artifact, List<Entry> entries, ModifiableEntry services, String name, DefinedService service, String prettyName) {
 		EAINode node = new EAINode();
 		node.setArtifactClass(service.getClass());
 		node.setArtifact(service);
@@ -373,9 +387,12 @@ public class CRUDArtifactManager extends JAXBArtifactManager<CRUDConfiguration, 
 		removeRecursively(structures, entries);
 		ModifiableEntry services = EAIRepositoryUtils.getParent(parent, "services", true);
 		removeRecursively(services, entries);
-		entries.add(services);
+		ModifiableEntry batchServices = EAIRepositoryUtils.getParent(parent, "batch", true);
+		removeRecursively(batchServices, entries);
 		entries.add(structures);
-		parent.removeChildren("services", "types");
+		entries.add(services);
+		entries.add(batchServices);
+		parent.removeChildren("services", "types", "batch");
 		for (Entry single : entries) {
 			if (single.isNode() && CRUDService.class.isAssignableFrom(single.getNode().getArtifactClass())) {
 				try {
