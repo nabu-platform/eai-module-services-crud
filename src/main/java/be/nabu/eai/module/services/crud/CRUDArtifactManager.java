@@ -241,30 +241,44 @@ public class CRUDArtifactManager extends JAXBArtifactManager<CRUDConfiguration, 
 			Element<?> targetElement = null;
 			// if any field along the way is optional, the entire end result is optional because we'll be doing an outer join
 			boolean optional = false;
-			for (int i = 0; i < split.length - 1; i++) {
-				Element<?> element = current.get(split[i]);
-				if (element != null) {
-					Value<Integer> minOccurs = element.getProperty(MinOccursProperty.getInstance());
-					if (minOccurs != null && minOccurs.getValue() != null && minOccurs.getValue() == 0) {
-						optional = true;
-					}
-					Value<String> property = element.getProperty(ForeignKeyProperty.getInstance());
-					if (property != null && property.getValue() != null) {
-						String[] split2 = property.getValue().split(":");
-						Artifact resolve = repository.resolve(split2[0]);
-						if (resolve instanceof ComplexType) {
-							targetElement = ((ComplexType) resolve).get(i == split.length - 2 ? split[i + 1] : split2[1]);
-							current = (ComplexType) resolve;
-						}
-						else {
-							targetElement = null;
-							break;
-						}
-					}
+			if (split.length == 1) {
+				// get it directly from the core type (if possible)
+				targetElement = current.get(split[0]);
+				// if we can't find it, check if we are referencing another imported field
+				if (targetElement == null) {
+					targetElement = output.get(split[0]);
 				}
-				else {
-					targetElement = null;
-					break;
+			}
+			else {
+				for (int i = 0; i < split.length - 1; i++) {
+					Element<?> element = current.get(split[i]);
+					// if we are still at the root, we can be doing funky stuff by using custom defined foreign keys (that only appear in the output)
+					if (element == null && i == 0) {
+						element = output.get(split[i]);
+					}
+					if (element != null) {
+						Value<Integer> minOccurs = element.getProperty(MinOccursProperty.getInstance());
+						if (minOccurs != null && minOccurs.getValue() != null && minOccurs.getValue() == 0) {
+							optional = true;
+						}
+						Value<String> property = element.getProperty(ForeignKeyProperty.getInstance());
+						if (property != null && property.getValue() != null) {
+							String[] split2 = property.getValue().split(":");
+							Artifact resolve = repository.resolve(split2[0]);
+							if (resolve instanceof ComplexType) {
+								targetElement = ((ComplexType) resolve).get(i == split.length - 2 ? split[i + 1] : split2[1]);
+								current = (ComplexType) resolve;
+							}
+							else {
+								targetElement = null;
+								break;
+							}
+						}
+					}
+					else {
+						targetElement = null;
+						break;
+					}
 				}
 			}
 			if (targetElement != null) {
@@ -273,6 +287,9 @@ public class CRUDArtifactManager extends JAXBArtifactManager<CRUDConfiguration, 
 				clone.setProperty(new ValueImpl<String>(NameProperty.getInstance(), field.getLocalName()));
 				if (optional) {
 					clone.setProperty(new ValueImpl<Integer>(MinOccursProperty.getInstance(), 0));
+				}
+				if (field.getForeignKey() != null) {
+					clone.setProperty(new ValueImpl<String>(ForeignKeyProperty.getInstance(), field.getForeignKey()));
 				}
 				// explicitly set primary key to false, we can't inject other primary keys
 				// otherwise binding logic building on top of this document might get confused

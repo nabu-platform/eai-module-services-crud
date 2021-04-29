@@ -20,6 +20,7 @@ public class CRUDConfiguration {
 	public static class ForeignNameField {
 		private String foreignName;
 		private String localName;
+		private String foreignKey;
 		public String getForeignName() {
 			return foreignName;
 		}
@@ -31,6 +32,12 @@ public class CRUDConfiguration {
 		}
 		public void setLocalName(String localName) {
 			this.localName = localName;
+		}
+		public String getForeignKey() {
+			return foreignKey;
+		}
+		public void setForeignKey(String foreignKey) {
+			this.foreignKey = foreignKey;
 		}
 	}
 	

@@ -17,6 +17,9 @@ import be.nabu.eai.developer.impl.CustomTooltip;
 import be.nabu.eai.developer.managers.base.BaseArtifactGUIInstance;
 import be.nabu.eai.developer.managers.base.BaseJAXBGUIManager;
 import be.nabu.eai.developer.managers.util.SimpleProperty;
+import be.nabu.eai.developer.managers.util.SimplePropertyUpdater;
+import be.nabu.eai.developer.util.EAIDeveloperUtils;
+import be.nabu.eai.developer.util.EAIDeveloperUtils.PropertiesHandler;
 import be.nabu.eai.module.services.crud.CRUDConfiguration.ForeignNameField;
 import be.nabu.eai.module.services.crud.CRUDService.CRUDType;
 import be.nabu.eai.module.services.crud.api.CRUDListAction;
@@ -38,6 +41,7 @@ import be.nabu.libs.types.api.ComplexType;
 import be.nabu.libs.types.api.DefinedType;
 import be.nabu.libs.types.api.Element;
 import be.nabu.libs.types.api.SimpleType;
+import be.nabu.libs.types.base.ValueImpl;
 import be.nabu.libs.types.properties.ForeignKeyProperty;
 import be.nabu.libs.validator.api.Validation;
 import javafx.application.Platform;
@@ -674,6 +678,16 @@ public class CRUDArtifactGUIManager extends BaseJAXBGUIManager<CRUDConfiguration
 		return fields;
 	}
 	
+	private static Map<String, String> getForeignKeys(List<ForeignNameField> foreignFields) {
+		Map<String, String> keys = new HashMap<String, String>();
+		// suppose your type extends another type (e.g. node) and you want to use a foreign key from that parent type, it "should" be possible. the expansion should get the correct binding
+		for (ForeignNameField element : foreignFields) {
+			if (element.getForeignKey() != null) {
+				keys.put(element.getLocalName(), element.getForeignKey());
+			}
+		}
+		return keys;
+	}
 	private static Map<String, String> getForeignKeys(ComplexType type) {
 		Map<String, String> keys = new HashMap<String, String>();
 		// suppose your type extends another type (e.g. node) and you want to use a foreign key from that parent type, it "should" be possible. the expansion should get the correct binding
@@ -738,7 +752,35 @@ public class CRUDArtifactGUIManager extends BaseJAXBGUIManager<CRUDConfiguration
 					MainController.getInstance().setChanged();
 				}
 			});
-			box.getChildren().addAll(remove, localName, remoteName);
+			new CustomTooltip("Remove this imported field").install(remove);
+			
+			// add a foreign key to a particular field so you can build on top of that
+			Button reference = new Button();
+			reference.setGraphic(MainController.loadFixedSizeGraphic("move/right.png", 12));
+			reference.getStyleClass().add("crud-reference");
+			reference.addEventHandler(MouseEvent.MOUSE_CLICKED, new EventHandler<MouseEvent>() {
+				@Override
+				public void handle(MouseEvent arg0) {
+					SimpleProperty<String> simpleProperty = new SimpleProperty<String>("Foreign Key", String.class, false);
+					EAIDeveloperUtils.buildPopup(MainController.getInstance(), "Set foreign key", Arrays.asList(simpleProperty), new PropertiesHandler() {
+						@Override
+						public void handle(SimplePropertyUpdater updater) {
+							Object value = updater.getValue("Foreign Key");
+							if (value == null && field.getForeignKey() != null) {
+								MainController.getInstance().setChanged();
+								field.setForeignKey(null);
+							}
+							else if (value != null && !value.equals(field.getForeignKey())) {
+								MainController.getInstance().setChanged();
+								field.setForeignKey(value.toString());
+							}
+						}
+					}, false, MainController.getInstance().getActiveStage(), new ValueImpl<String>(simpleProperty, field.getForeignKey()));
+				}
+			});
+			new CustomTooltip("Update the foreign key for this field").install(reference);
+			
+			box.getChildren().addAll(remove, reference, localName, remoteName);
 			main.getChildren().add(box);
 		}
 		// allow adding of new field
@@ -751,7 +793,7 @@ public class CRUDArtifactGUIManager extends BaseJAXBGUIManager<CRUDConfiguration
 		name.promptTextProperty().bind(fieldName);
 		
 		HBox combo = new HBox();
-		drawCombo(repository, foreignName, fieldName, (ComplexType) coreType, combo, true);
+		drawCombo(repository, foreignName, fieldName, (ComplexType) coreType, combo, true, foreignFields);
 		
 		Button add = new Button();
 		add.setGraphic(MainController.loadFixedSizeGraphic("icons/add.png", 12));
@@ -784,9 +826,12 @@ public class CRUDArtifactGUIManager extends BaseJAXBGUIManager<CRUDConfiguration
 	
 	// the first combo box is from the current type and you _must_ choose a foreign
 	// every other combo box after that can contain any field
-	private static void drawCombo(Repository repository, StringProperty field, StringProperty name, ComplexType type, HBox combos, boolean limitToForeign) {
+	private static void drawCombo(Repository repository, StringProperty field, StringProperty name, ComplexType type, HBox combos, boolean limitToForeign, List<ForeignNameField> foreignFields) {
 		List<String> children = getChildren(type);
 		Map<String, String> foreignKeys = getForeignKeys(type);
+		// add self defined foreign keys in imported fields
+		foreignKeys.putAll(getForeignKeys(foreignFields));
+		
 		if ((limitToForeign && !foreignKeys.isEmpty()) || (!limitToForeign && !children.isEmpty())) {
 			// populate the combobox with foreign keys
 			ComboBox<String> box = new ComboBox<String>();
@@ -840,7 +885,7 @@ public class CRUDArtifactGUIManager extends BaseJAXBGUIManager<CRUDConfiguration
 							String[] split = foreignKeyValue.split(":");
 							Artifact resolve = repository.resolve(split[0]);
 							if (resolve instanceof ComplexType) {
-								drawCombo(repository, field, name, (ComplexType) resolve, combos, false);
+								drawCombo(repository, field, name, (ComplexType) resolve, combos, false, foreignFields);
 							}
 						}
 					}
