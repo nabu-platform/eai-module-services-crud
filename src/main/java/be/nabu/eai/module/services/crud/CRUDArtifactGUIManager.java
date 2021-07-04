@@ -792,18 +792,36 @@ public class CRUDArtifactGUIManager extends BaseJAXBGUIManager<CRUDConfiguration
 		
 		name.promptTextProperty().bind(fieldName);
 		
+		// @2021-06-02: you can insert custom foreign keys on fields that were originally not foreign-keyed
+		// this means however, to be able to do that you must be able to select the keys first
+		// so we allow all fields to be selected
+		// note that if this seems too confusing, we can always add a checkbox to explicitly toggle this behavior
+		CheckBox foreignFieldsOnly = new CheckBox();
+		foreignFieldsOnly.setSelected(true);
+		new CustomTooltip("If selected, only available foreign keys are shown, if you disable this you can access all the fields in the core type but not additionally imported fields").install(foreignFieldsOnly);
+		
 		HBox combo = new HBox();
-		drawCombo(repository, foreignName, fieldName, (ComplexType) coreType, combo, true, foreignFields);
+		drawCombo(repository, foreignName, fieldName, (ComplexType) coreType, combo, foreignFieldsOnly.isSelected(), foreignFields);
+//		drawCombo(repository, foreignName, fieldName, (ComplexType) coreType, combo, true, foreignFields);
+		
+		foreignFieldsOnly.selectedProperty().addListener(new ChangeListener<Boolean>() {
+			@Override
+			public void changed(ObservableValue<? extends Boolean> arg0, Boolean arg1, Boolean arg2) {
+				combo.getChildren().clear();
+				drawCombo(repository, foreignName, fieldName, (ComplexType) coreType, combo, arg2, foreignFields);
+			}
+		});
 		
 		Button add = new Button();
 		add.setGraphic(MainController.loadFixedSizeGraphic("icons/add.png", 12));
 		HBox box = new HBox();
 		box.setAlignment(Pos.CENTER_LEFT);
-		box.getChildren().addAll(name, combo, add);
+		box.getChildren().addAll(name, combo, foreignFieldsOnly, add);
 		box.setPadding(new Insets(10, 0, 0, 0));
 		main.getChildren().add(box);
 		HBox.setMargin(combo, new Insets(0, 10, 0, 10));
 		HBox.setMargin(add, new Insets(0, 10, 0, 10));
+		HBox.setMargin(foreignFieldsOnly, new Insets(0, 10, 0, 10));
 		
 		add.disableProperty().bind(foreignName.isNull().or(foreignName.isEmpty()));
 		add.addEventHandler(ActionEvent.ANY, new EventHandler<ActionEvent>() {

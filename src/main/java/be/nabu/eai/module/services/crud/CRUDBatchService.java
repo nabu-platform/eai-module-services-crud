@@ -13,6 +13,7 @@ import be.nabu.libs.services.api.ServiceInstance;
 import be.nabu.libs.services.api.ServiceInterface;
 import be.nabu.libs.types.CollectionHandlerFactory;
 import be.nabu.libs.types.ComplexContentWrapperFactory;
+import be.nabu.libs.types.SimpleTypeWrapperFactory;
 import be.nabu.libs.types.api.CollectionHandlerProvider;
 import be.nabu.libs.types.api.ComplexContent;
 import be.nabu.libs.types.api.ComplexType;
@@ -54,8 +55,13 @@ public class CRUDBatchService implements DefinedService {
 					Structure input = new Structure();
 					input.setName("input");
 					Element<?> primary = CRUDService.getPrimary((ComplexType) artifact.getConfig().getCoreType());
+					input.add(new SimpleElementImpl<String>("connectionId", SimpleTypeWrapperFactory.getInstance().getWrapper().wrap(String.class), input, new ValueImpl<Integer>(MinOccursProperty.getInstance(), 0)));
+					input.add(new SimpleElementImpl<String>("transactionId", SimpleTypeWrapperFactory.getInstance().getWrapper().wrap(String.class), input, new ValueImpl<Integer>(MinOccursProperty.getInstance(), 0)));
 					switch(type) {
 						case UPDATE:
+							if (artifact.getConfig().isUseLanguage()) {
+								input.add(new SimpleElementImpl<String>("language", SimpleTypeWrapperFactory.getInstance().getWrapper().wrap(String.class), input, new ValueImpl<Integer>(MinOccursProperty.getInstance(), 0)));
+							}
 							input.add(new ComplexElementImpl("instance", updateInput, input, 
 								new ValueImpl<Integer>(MinOccursProperty.getInstance(), 0),
 								new ValueImpl<Integer>(MaxOccursProperty.getInstance(), 0)));

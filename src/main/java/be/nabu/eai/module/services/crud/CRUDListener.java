@@ -22,6 +22,7 @@ import be.nabu.eai.repository.api.LanguageProvider;
 import be.nabu.libs.authentication.api.Authenticator;
 import be.nabu.libs.authentication.api.Device;
 import be.nabu.libs.authentication.api.PermissionHandler;
+import be.nabu.libs.authentication.api.PotentialPermissionHandler;
 import be.nabu.libs.authentication.api.Token;
 import be.nabu.libs.events.api.EventHandler;
 import be.nabu.libs.http.HTTPCodes;
@@ -32,7 +33,6 @@ import be.nabu.libs.http.core.DefaultHTTPResponse;
 import be.nabu.libs.http.core.HTTPUtils;
 import be.nabu.libs.http.glue.GlueListener;
 import be.nabu.libs.http.glue.GlueListener.PathAnalysis;
-import be.nabu.libs.http.glue.impl.ResponseMethods;
 import be.nabu.libs.resources.URIUtils;
 import be.nabu.libs.services.ServiceRuntime;
 import be.nabu.libs.services.ServiceUtils;
@@ -59,7 +59,6 @@ import be.nabu.utils.mime.impl.PlainMimeEmptyPart;
 // TODO: fix security context!
 public class CRUDListener implements EventHandler<HTTPRequest, HTTPResponse> {
 	
-	private Logger logger = LoggerFactory.getLogger(getClass());
 	private CRUDArtifact artifact;
 	private String parentPath;
 	private CRUDService service;
@@ -346,7 +345,17 @@ public class CRUDListener implements EventHandler<HTTPRequest, HTTPResponse> {
 			}
 			
 			if (action != null && !permissionHandler.hasPermission(token, context, action)) {
-				throw new HTTPException(token == null ? 401 : 403, "User does not have permission to execute the rest service", "User '" + (token == null ? Authenticator.ANONYMOUS : token.getName()) + "' does not have permission to run the CRUD service: " + service.getId(), token);
+				boolean allowed = false;
+				// if you specifically did not select a security field, we can check the potential permissions as well
+				if (artifact.getConfig().getSecurityContextField() == null) {
+					PotentialPermissionHandler potentialPermissionHandler = application.getPotentialPermissionHandler();
+					if (potentialPermissionHandler != null) {
+						allowed = potentialPermissionHandler.hasPotentialPermission(token, action);
+					}
+				}
+				if (!allowed) {
+					throw new HTTPException(token == null ? 401 : 403, "User does not have permission to execute the rest service", "User '" + (token == null ? Authenticator.ANONYMOUS : token.getName()) + "' does not have permission to run the CRUD service: " + service.getId(), token);
+				}
 			}
 		}
 		
