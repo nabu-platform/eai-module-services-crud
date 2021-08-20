@@ -302,6 +302,7 @@ public class CRUDService implements DefinedService, WebFragment, RESTFragment, A
 						serviceInput.set("offset", input == null ? null : input.get("offset"));
 						serviceInput.set("orderBy", input == null ? null : input.get("orderBy"));
 						serviceInput.set("limitToUser", input == null ? null : input.get("limitToUser"));
+						serviceInput.set("lazy", input == null ? null : input.get("lazy"));
 						List<Filter> filters = new ArrayList<Filter>();
 						if (listAction.getFilters() != null) {
 							transformFilters(listAction.getFilters(), input, filters);
@@ -484,6 +485,7 @@ public class CRUDService implements DefinedService, WebFragment, RESTFragment, A
 					input.add(new SimpleElementImpl<Long>("offset", SimpleTypeWrapperFactory.getInstance().getWrapper().wrap(Long.class), input, new ValueImpl<Integer>(MinOccursProperty.getInstance(), 0)));
 					input.add(new SimpleElementImpl<String>("orderBy", SimpleTypeWrapperFactory.getInstance().getWrapper().wrap(String.class), input, new ValueImpl<Integer>(MinOccursProperty.getInstance(), 0), new ValueImpl<Integer>(MaxOccursProperty.getInstance(), 0)));
 					input.add(new SimpleElementImpl<Boolean>("limitToUser", SimpleTypeWrapperFactory.getInstance().getWrapper().wrap(Boolean.class), input, new ValueImpl<Integer>(MinOccursProperty.getInstance(), 0), new ValueImpl<String>(CommentProperty.getInstance(), "If you enable this, the provider should try to limit the result set to data that the current user is allowed to see")));
+					input.add(new SimpleElementImpl<Boolean>("lazy", SimpleTypeWrapperFactory.getInstance().getWrapper().wrap(Boolean.class), input, new ValueImpl<Integer>(MinOccursProperty.getInstance(), 0), new ValueImpl<String>(CommentProperty.getInstance(), "If you enable lazy mode, the provider will try to provide a lazy list, if it can not, a full list might be returned")));
 					if (listAction.getFilters() != null) {
 						Structure filters = new Structure();
 						filters.setName("filter");

@@ -27,6 +27,8 @@ public interface CRUDProvider {
 			// if it is provider-specific, the REST endpoints won't know what the parameters do, making it hard to force this to true
 			// this particular parameter is likely relevant enough to promote to a dedicated parameter rather than a generic one
 			@WebParam(name = "limitToUser") Boolean limitToUser,
+			// whether it should be attempted to return a lazy version of the resultset (which might not always be possible)
+			@WebParam(name = "lazy") Boolean lazy,
 			// some generic metadata we have about the crud service
 			@WebParam(name = "meta") CRUDMeta meta);
 	
