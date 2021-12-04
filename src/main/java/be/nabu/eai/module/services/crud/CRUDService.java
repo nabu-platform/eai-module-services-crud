@@ -369,7 +369,7 @@ public class CRUDService implements DefinedService, WebFragment, RESTFragment, A
 		for (CRUDFilter filter : sourceFilters) {
 			// no operator or no key is invalid
 			// additionally if you have an input operator but don't have the flag "isinput" checked, it can only produce invalid results
-			if (filter.getOperator() == null || filter.getKey() == null
+			if (filter == null || filter.getOperator() == null || filter.getKey() == null
 					|| (!filter.isInput() && inputOperators.contains(filter.getOperator()))) {
 				continue;
 			}
@@ -490,7 +490,7 @@ public class CRUDService implements DefinedService, WebFragment, RESTFragment, A
 						Structure filters = new Structure();
 						filters.setName("filter");
 						for (CRUDFilter filter : listAction.getFilters()) {
-							if (filter.isInput()) {
+							if (filter != null && filter.isInput() && filter.getKey() != null) {
 								Element<?> element = ((ComplexType) artifact.getConfig().getCoreType()).get(filter.getKey());
 								// if the element does not exist in the core type, it may have been added via foreign fields
 								if (element == null) {
@@ -767,7 +767,7 @@ public class CRUDService implements DefinedService, WebFragment, RESTFragment, A
 		boolean hasParent = false;
 		if (listAction.getFilters() != null && artifact.getConfig().getSecurityContextField() != null) {
 			for (CRUDFilter filter : listAction.getFilters()) {
-				if (artifact.getConfig().getSecurityContextField().equals(filter.getKey()) && "=".equals(filter.getOperator())) {
+				if (filter != null && filter.getKey() != null && artifact.getConfig().getSecurityContextField().equals(filter.getKey()) && "=".equals(filter.getOperator())) {
 					hasParent = true;
 					break;
 				}
@@ -832,7 +832,7 @@ public class CRUDService implements DefinedService, WebFragment, RESTFragment, A
 			if (listAction.getFilters() != null) {
 				Element<?> parent = getSecurityContext();
 				for (CRUDFilter filter : listAction.getFilters()) {
-					if (filter.isInput()) {
+					if (filter != null && filter.getKey() != null && filter.isInput()) {
 						// if we have a list service which has a parent id filter, we put it in the path, not in the query
 						if (parent != null && parent.getName().equals(filter.getKey())) {
 							continue;

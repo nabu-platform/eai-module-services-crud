@@ -206,7 +206,7 @@ public class CRUDBatchService implements DefinedService {
 							}
 							for (Object object : handler.getAsIterable(deleteId)) {
 								serviceInput = artifact.getConfig().getProvider().getConfig().getDeleteService().getServiceInterface().getInputDefinition().newInstance();
-								serviceInput.set("id", deleteId);
+								serviceInput.set("id", object);
 								serviceInput.set("typeId", artifact.getConfig().getCoreType().getId());
 								serviceInput.set("connectionId", connectionId);
 								serviceInput.set("transactionId", transactionId);

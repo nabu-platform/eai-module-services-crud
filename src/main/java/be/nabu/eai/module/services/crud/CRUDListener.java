@@ -308,9 +308,11 @@ public class CRUDListener implements EventHandler<HTTPRequest, HTTPResponse> {
 				Element<?> securityContext = service.getSecurityContext();
 				if (securityContext != null) {
 					for (CRUDFilter filter : service.getFilters()) {
-						if (securityContext.getName().equals(filter.getKey())) {
-							parentQueryName = filter.getAlias() == null ? filter.getKey() : filter.getAlias();
-							break;
+						if (filter != null && filter.getKey() != null) {
+							if (securityContext.getName().equals(filter.getKey())) {
+								parentQueryName = filter.getAlias() == null ? filter.getKey() : filter.getAlias();
+								break;
+							}
 						}
 					}
 				}
@@ -421,7 +423,7 @@ public class CRUDListener implements EventHandler<HTTPRequest, HTTPResponse> {
 				}
 				if (service.getFilters() != null) {
 					for (CRUDFilter filter : service.getFilters()) {
-						if (filter.isInput()) {
+						if (filter != null && filter.isInput() && filter.getKey() != null) {
 							List<String> list = queryProperties.get(filter.getAlias() == null ? filter.getKey() : filter.getAlias());
 							if (list != null && !list.isEmpty()) {
 								input.set("filter/" + (filter.getAlias() == null ? filter.getKey() : filter.getAlias()), list);
@@ -438,6 +440,7 @@ public class CRUDListener implements EventHandler<HTTPRequest, HTTPResponse> {
 		ServiceRuntime runtime = new ServiceRuntime(service, executionContext);
 		// we set the service context to the web application, rest services can be mounted in multiple applications
 		ServiceUtils.setServiceContext(runtime, application.getId());
+		runtime.getContext().put("webApplicationId", application.getId());
 		return runtime.run(input);
 	}
 }
