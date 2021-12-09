@@ -7,4 +7,6 @@ public interface CRUDListAction extends CRUDAction {
 	public void setRoles(List<String> roles);
 	public List<String> getBlacklistFields();
 	public void setBlacklistFields(List<String> blacklistFields);
+	public boolean isBroadcastUpdate();
+	public boolean isBroadcastCreate();
 }

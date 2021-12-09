@@ -13,6 +13,8 @@ public class CRUDView implements CRUDListAction {
 	private List<String> blacklistFields;
 	private String name;
 	private CRUDType type;
+	private boolean broadcastUpdate, broadcastCreate;
+	
 	public List<String> getRoles() {
 		return roles;
 	}
@@ -48,5 +50,19 @@ public class CRUDView implements CRUDListAction {
 	}
 	public void setType(CRUDType type) {
 		this.type = type;
+	}
+	@Override
+	public boolean isBroadcastUpdate() {
+		return broadcastUpdate;
+	}
+	public void setBroadcastUpdate(boolean broadcastUpdate) {
+		this.broadcastUpdate = broadcastUpdate;
+	}
+	@Override
+	public boolean isBroadcastCreate() {
+		return broadcastCreate;
+	}
+	public void setBroadcastCreate(boolean broadcastCreate) {
+		this.broadcastCreate = broadcastCreate;
 	}
 }

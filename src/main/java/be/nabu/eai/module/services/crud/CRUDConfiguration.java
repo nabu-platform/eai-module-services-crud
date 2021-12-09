@@ -41,6 +41,8 @@ public class CRUDConfiguration {
 		}
 	}
 	
+	private boolean broadcastCreate, broadcastUpdate;
+	
 	private List<CRUDView> views;
 
 	private boolean allowHeaderAsQueryParameter = true;
@@ -225,5 +227,18 @@ public class CRUDConfiguration {
 	public void setViews(List<CRUDView> views) {
 		this.views = views;
 	}
-
+	
+	public boolean isBroadcastCreate() {
+		return broadcastCreate;
+	}
+	public void setBroadcastCreate(boolean broadcastCreate) {
+		this.broadcastCreate = broadcastCreate;
+	}
+	public boolean isBroadcastUpdate() {
+		return broadcastUpdate;
+	}
+	public void setBroadcastUpdate(boolean broadcastUpdate) {
+		this.broadcastUpdate = broadcastUpdate;
+	}
+	
 }

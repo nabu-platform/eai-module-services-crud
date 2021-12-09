@@ -18,6 +18,7 @@ import be.nabu.eai.module.web.application.WebFragment;
 import be.nabu.eai.module.web.application.api.PermissionWithRole;
 import be.nabu.eai.module.web.application.api.RESTFragment;
 import be.nabu.eai.repository.util.Filter;
+import be.nabu.libs.artifacts.api.Artifact;
 import be.nabu.libs.artifacts.api.ArtifactWithExceptions;
 import be.nabu.libs.artifacts.api.ExceptionDescription;
 import be.nabu.libs.authentication.api.Permission;
@@ -316,7 +317,6 @@ public class CRUDService implements DefinedService, WebFragment, RESTFragment, A
 				ServiceRuntime runtime = new ServiceRuntime(service, executionContext);
 				ComplexContent serviceOutput = runtime.run(serviceInput);
 				
-				// in case of the read, we have some stuff to do still
 				switch(type) {
 					case LIST: 
 						if (serviceOutput.get("results") != null) {
@@ -344,6 +344,10 @@ public class CRUDService implements DefinedService, WebFragment, RESTFragment, A
 								output.set("result", result.getResults().get(0));
 							}
 						}
+					break;
+					case UPDATE:
+					case CREATE:
+						artifact.checkBroadcast(executionContext, connectionId, transactionId, (ComplexContent) serviceInput.get("instance"), type == CRUDType.UPDATE);
 					break;
 				}
 				return output;

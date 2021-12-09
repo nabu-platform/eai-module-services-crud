@@ -443,6 +443,56 @@ public class CRUDArtifactGUIManager extends BaseJAXBGUIManager<CRUDConfiguration
 		if (!foreign.getChildren().isEmpty()) {
 			main.getChildren().add(foreign);
 		}
+		
+		Artifact resolve = artifact.getRepository().resolve("nabu.misc.broadcast.Services.fire");
+		// we can only broadcast if we have the service, don't offer the option otherwise
+		if (resolve != null) {
+			VBox broadcast = new VBox();
+			label = new Label("Broadcast");
+			label.getStyleClass().add("h1");
+			broadcast.getChildren().add(label);
+			label = new Label("Check if and when you want to broadcast:");
+			label.getStyleClass().add("p");
+			broadcast.getChildren().add(label);
+			
+			CheckBox box = new CheckBox("On create");
+			box.setSelected(instance.isBroadcastCreate());
+			box.selectedProperty().addListener(new ChangeListener<Boolean>() {
+				@Override
+				public void changed(ObservableValue<? extends Boolean> arg0, Boolean arg1, Boolean arg2) {
+					if (instance instanceof CRUDView) {
+						((CRUDView) instance).setBroadcastCreate(arg2 != null && arg2);
+					}
+					else {
+						artifact.getConfig().setBroadcastCreate(arg2 != null && arg2);
+					}
+					MainController.getInstance().setChanged();
+				}
+			});
+			VBox checkboxes = new VBox();
+			checkboxes.getChildren().add(box);
+			VBox.setMargin(box, new Insets(3, 20, 0, 0));
+			
+			box = new CheckBox("On update");
+			box.setSelected(instance.isBroadcastUpdate());
+			box.selectedProperty().addListener(new ChangeListener<Boolean>() {
+				@Override
+				public void changed(ObservableValue<? extends Boolean> arg0, Boolean arg1, Boolean arg2) {
+					if (instance instanceof CRUDView) {
+						((CRUDView) instance).setBroadcastUpdate(arg2 != null && arg2);
+					}
+					else {
+						artifact.getConfig().setBroadcastUpdate(arg2 != null && arg2);
+					}
+					MainController.getInstance().setChanged();
+				}
+			});
+			checkboxes.getChildren().add(box);
+			VBox.setMargin(box, new Insets(3, 20, 0, 0));
+			
+			broadcast.getChildren().add(checkboxes);
+			main.getChildren().add(broadcast);
+		}
 	}
 
 	public static interface Redrawer {
