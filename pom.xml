@@ -78,6 +78,11 @@
 			<scope>provided</scope>
 		</dependency>
 		<dependency>
+			<groupId>nabu</groupId>
+			<artifactId>eai-module-keystore</artifactId>
+			<scope>provided</scope>
+		</dependency>
+		<dependency>
 			<groupId>be.nabu.libs.services</groupId>
 			<artifactId>services-jdbc</artifactId>
 			<scope>provided</scope>

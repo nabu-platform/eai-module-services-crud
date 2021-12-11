@@ -366,8 +366,12 @@ public class CRUDService implements DefinedService, WebFragment, RESTFragment, A
 		return meta;
 	}
 	
-	@SuppressWarnings("unchecked")
 	public static void transformFilters(List<CRUDFilter> sourceFilters, ComplexContent input, List<Filter> targetFilters) {
+		transformFilters(sourceFilters, input, targetFilters, true);
+	}
+	
+	@SuppressWarnings("unchecked")
+	public static void transformFilters(List<CRUDFilter> sourceFilters, ComplexContent input, List<Filter> targetFilters, boolean addSqlWildcard) {
 		// the previous removed one
 		CRUDFilter removed = null;
 		for (CRUDFilter filter : sourceFilters) {
@@ -402,7 +406,7 @@ public class CRUDService implements DefinedService, WebFragment, RESTFragment, A
 				if ("like".equals(newFilter.getOperator())) {
 					List<Object> wildCardValues = new ArrayList<Object>();
 					for (Object value : values) {
-						if (value instanceof String) {
+						if (value instanceof String && addSqlWildcard) {
 							value = "%" + value.toString() + "%";
 						}
 						wildCardValues.add(value);
@@ -835,6 +839,7 @@ public class CRUDService implements DefinedService, WebFragment, RESTFragment, A
 			}
 			if (listAction.getFilters() != null) {
 				Element<?> parent = getSecurityContext();
+				List<String> alreadyDefined = new ArrayList<String>();
 				for (CRUDFilter filter : listAction.getFilters()) {
 					if (filter != null && filter.getKey() != null && filter.isInput()) {
 						// if we have a list service which has a parent id filter, we put it in the path, not in the query
@@ -851,6 +856,13 @@ public class CRUDService implements DefinedService, WebFragment, RESTFragment, A
 							continue;
 						}
 						SimpleElementImpl childElement = new SimpleElementImpl(filter.getAlias() == null ? filter.getKey() : filter.getAlias(), (SimpleType<?>) element.getType(), input, new ValueImpl<Integer>(MinOccursProperty.getInstance(), 0));
+						// we can reuse the same filter with the same name for multiple matches, we however only want to expose it once
+						if (alreadyDefined.contains(childElement.getName())) {
+							continue;
+						}
+						else {
+							alreadyDefined.add(childElement.getName());
+						}
 						// only for some filters do we support the list entries
 						if ("=".equals(filter.getOperator()) || "<>".equals(filter.getOperator())) {
 							childElement.setProperty(new ValueImpl<Integer>(MaxOccursProperty.getInstance(), 0));
@@ -912,4 +924,21 @@ public class CRUDService implements DefinedService, WebFragment, RESTFragment, A
 		}
 		return !(service instanceof ArtifactWithExceptions) ? null : ((ArtifactWithExceptions) service).getExceptions();
 	}
+	
+	protected CRUDListAction getCRUDListAction() {
+		return listAction;
+	}
+
+	@Override
+	public Map<String, Object> getExtensions() {
+		Map<String, Object> extensions = new HashMap<String, Object>();
+		if (listAction != null && listAction.isBroadcastCreate()) {
+			extensions.put("stream-create", "true");
+		}
+		if (listAction != null && listAction.isBroadcastUpdate()) {
+			extensions.put("stream-update", "true");
+		}
+		return extensions;
+	}
+	
 }
