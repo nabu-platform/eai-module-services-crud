@@ -412,6 +412,13 @@ public class CRUDArtifactGUIManager extends BaseJAXBGUIManager<CRUDConfiguration
 			instance.setForeignFields(new ArrayList<ForeignNameField>());
 		}
 		
+		Artifact resolve = artifact.getRepository().resolve("nabu.misc.broadcast.Services.fire");
+		CheckBox broadcastUpdate = resolve == null ? null : new CheckBox("On update");
+		// set the boolean now already, otherwise we will always start off unchecked
+		if (broadcastUpdate != null) {
+			broadcastUpdate.setSelected(instance.isBroadcastUpdate());
+		}
+		
 		Label label;
 		drawFilters(instance.getForeignFields(), artifact.getConfig().getCoreType(), instance.getFilters(), main, new Redrawer() {
 			@Override
@@ -419,7 +426,7 @@ public class CRUDArtifactGUIManager extends BaseJAXBGUIManager<CRUDConfiguration
 				list.getChildren().clear();
 				populateList(artifact, instance, list);				
 			}
-		}, true);
+		}, true, broadcastUpdate);
 
 		VBox fields = new VBox();
 		fields.getStyleClass().addAll("section");
@@ -444,7 +451,6 @@ public class CRUDArtifactGUIManager extends BaseJAXBGUIManager<CRUDConfiguration
 			main.getChildren().add(foreign);
 		}
 		
-		Artifact resolve = artifact.getRepository().resolve("nabu.misc.broadcast.Services.fire");
 		// we can only broadcast if we have the service, don't offer the option otherwise
 		if (resolve != null) {
 			VBox broadcast = new VBox();
@@ -473,9 +479,7 @@ public class CRUDArtifactGUIManager extends BaseJAXBGUIManager<CRUDConfiguration
 			checkboxes.getChildren().add(box);
 			VBox.setMargin(box, new Insets(3, 20, 0, 0));
 			
-			box = new CheckBox("On update");
-			box.setSelected(instance.isBroadcastUpdate());
-			box.selectedProperty().addListener(new ChangeListener<Boolean>() {
+			broadcastUpdate.selectedProperty().addListener(new ChangeListener<Boolean>() {
 				@Override
 				public void changed(ObservableValue<? extends Boolean> arg0, Boolean arg1, Boolean arg2) {
 					if (instance instanceof CRUDView) {
@@ -487,8 +491,8 @@ public class CRUDArtifactGUIManager extends BaseJAXBGUIManager<CRUDConfiguration
 					MainController.getInstance().setChanged();
 				}
 			});
-			checkboxes.getChildren().add(box);
-			VBox.setMargin(box, new Insets(3, 20, 0, 0));
+			checkboxes.getChildren().add(broadcastUpdate);
+			VBox.setMargin(broadcastUpdate, new Insets(3, 20, 0, 0));
 			
 			broadcast.getChildren().add(checkboxes);
 			main.getChildren().add(broadcast);
@@ -499,7 +503,7 @@ public class CRUDArtifactGUIManager extends BaseJAXBGUIManager<CRUDConfiguration
 		public void redraw();
 	}
 	
-	public static void drawFilters(List<ForeignNameField> foreignFields, DefinedType coreType, List<CRUDFilter> crudFilters, VBox main, Redrawer redrawer, boolean allowAddAll) {
+	public static void drawFilters(List<ForeignNameField> foreignFields, DefinedType coreType, List<CRUDFilter> crudFilters, VBox main, Redrawer redrawer, boolean allowAddAll, CheckBox broadcastUpdate) {
 		VBox filters = new VBox();
 		main.getChildren().add(filters);
 		filters.getStyleClass().addAll("section", "block");
@@ -565,6 +569,49 @@ public class CRUDArtifactGUIManager extends BaseJAXBGUIManager<CRUDConfiguration
 				filter.setInput(true);
 				input.setVisible(false);
 				input.setManaged(false);
+			}
+			
+			CheckBox vary = new CheckBox();
+			new CustomTooltip("Do you want to allow subscription of updated values that do not match the filter?").install(vary);
+			vary.setSelected(filter.isVary());
+			vary.selectedProperty().addListener(new ChangeListener<Boolean>() {
+				@Override
+				public void changed(ObservableValue<? extends Boolean> arg0, Boolean arg1, Boolean arg2) {
+					if (arg2 != null && arg2) {
+						filter.setVary(true);
+					}
+					else {
+						filter.setVary(false);
+					}
+					MainController.getInstance().setChanged();
+				}
+			});
+			// if we don't have broadcasting or don't broadcast updates, the vary option is not relevant
+			if (broadcastUpdate == null || !broadcastUpdate.isSelected()) {
+				vary.setDisable(true);
+				filter.setVary(false);
+				vary.setSelected(false);
+				vary.setVisible(false);
+				vary.setManaged(false);
+			}
+			if (broadcastUpdate != null) {
+				broadcastUpdate.selectedProperty().addListener(new ChangeListener<Boolean>() {
+					@Override
+					public void changed(ObservableValue<? extends Boolean> arg0, Boolean arg1, Boolean arg2) {
+						if (arg2 != null && arg2) {
+							vary.setDisable(false);
+							vary.setVisible(true);
+							vary.setManaged(true);
+						}
+						else {
+							vary.setDisable(true);
+							filter.setVary(false);
+							vary.setSelected(false);
+							vary.setVisible(false);
+							vary.setManaged(false);
+						}
+					}
+				});
 			}
 			
 			ComboBox<String> operator = new ComboBox<String>();
@@ -656,8 +703,9 @@ public class CRUDArtifactGUIManager extends BaseJAXBGUIManager<CRUDConfiguration
 			HBox.setMargin(field, new Insets(10, 0, 10, 10));
 			HBox.setMargin(operator, new Insets(10, 0, 10, 10));
 			HBox.setMargin(input, new Insets(10, 0, 10, 10));
+			HBox.setMargin(vary, new Insets(10, 0, 10, 10));
 			HBox.setMargin(buttons, new Insets(10, 0, 10, 10));
-			filterBox.getChildren().addAll(mainOperator, alias, field, operator, buttons, input);
+			filterBox.getChildren().addAll(mainOperator, alias, field, operator, buttons, input, vary);
 			filters.getChildren().addAll(filterBox);
 		}
 		

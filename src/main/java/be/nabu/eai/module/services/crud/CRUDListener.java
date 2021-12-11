@@ -494,16 +494,23 @@ public class CRUDListener implements EventHandler<HTTPRequest, HTTPResponse> {
 					typeId += CRUDArtifactManager.getViewName(crudListAction.getName());
 				}
 				DefinedType type = (DefinedType) artifact.getRepository().resolve(typeId);
+				String updateId = crudListAction.isBroadcastUpdate() ? UUID.randomUUID().toString().replace("-", "") : null;
 				if (type == null) {
 					logger.warn("Could not resolve type for streaming: " + typeId);
 				}
 				else {
-					if (crudListAction.isBroadcastCreate() && service.getType().equals(CRUDType.LIST)) {
+					// create broadcasts are only relevant for list services
+					// update broadcasts are relevant for list services and for a GET only if it actually has a result
+					if ((crudListAction.isBroadcastCreate() && service.getType().equals(CRUDType.LIST)) || (crudListAction.isBroadcastUpdate() && (service.getType().equals(CRUDType.LIST) || (output != null && output.get("result") != null)))) {
+						// the glue query
 						String query = "";
+						String javascript = "";
 						if (crudListAction.getFilters() != null && !crudListAction.getFilters().isEmpty()) {
 							List<Filter> filters = new ArrayList<Filter>();
 							CRUDService.transformFilters(crudListAction.getFilters(), input, filters, false);
 							boolean openOr = false;
+							// the query or can be different, based on vary filters
+							boolean openQueryOr = false;
 							for (int i = 0; i < filters.size(); i++) {
 								Filter filter = filters.get(i);
 								if (filter.getKey() == null) {
@@ -513,7 +520,9 @@ public class CRUDListener implements EventHandler<HTTPRequest, HTTPResponse> {
 									continue;
 								}
 								
-								if (!query.isEmpty()) {
+								boolean vary = filter instanceof CRUDFilter && ((CRUDFilter) filter).isVary();
+								
+								if (!query.isEmpty() && !vary) {
 									if (filter.isOr()) {
 										query += " ||";
 									}
@@ -521,9 +530,23 @@ public class CRUDListener implements EventHandler<HTTPRequest, HTTPResponse> {
 										query += " &&";
 									}
 								}
+								
+								if (!javascript.isEmpty()) {
+									if (filter.isOr()) {
+										javascript += " ||";
+									}
+									else {
+										javascript += " &&";
+									}
+								}
+								
 								// start the or
 								if (i < filters.size() - 1 && !openOr && filters.get(i + 1).isOr()) {
-									query += " (";
+									if (!vary) {
+										query += " (";
+										openQueryOr = true;
+									}
+									javascript += " (";
 									openOr = true;
 								}
 								
@@ -542,7 +565,10 @@ public class CRUDListener implements EventHandler<HTTPRequest, HTTPResponse> {
 									inverse = false;
 								}
 								else if (inverse) {
-									query += " !(";
+									if (!vary) {
+										query += " !(";
+									}
+									javascript += " !(";
 								}
 								
 								if (operator.equals("=")) {
@@ -561,59 +587,108 @@ public class CRUDListener implements EventHandler<HTTPRequest, HTTPResponse> {
 									operator = "~";
 								}
 								
-								query += " " + filter.getKey();
-								query += " " + operator;
+								if (!vary) {
+									query += " " + filter.getKey();
+									query += " " + operator;
+								}
+
+								// for multiple values we do another thing in javascript
+								// [1,2].indexOf(value) >= 0
+								if (!isMultipleValues) {
+									javascript += " " + filter.getKey();
+								}
+								
+								// the regex operator does not have an equivalent
+								// we are not actually regexing, but a contains
+								if (operator.equals("~")) {
+									if (filter.isCaseInsensitive()) {
+										javascript += ".toLowerCase()";
+									}
+									javascript += ".indexOf(\"";
+								}
+								else if (!isMultipleValues) {
+									javascript += " " + operator;
+								}
 								
 								if (isMultipleValues || isSingleValue) {
 									if (!isMultipleValues) {
 										Object value = filter.getValues().get(0);
 										if (operator.equals("~")) {
 											// escape the double quotes
-											String regex = value == null ? ".*" : ".*" + Pattern.quote(ConverterFactory.getInstance().getConverter().convert(value, String.class).replace("\"", "\\\"")) + ".*";
+											String stringValue = ConverterFactory.getInstance().getConverter().convert(value, String.class);
+											String regex = value == null ? ".*" : ".*" + Pattern.quote(stringValue.replace("\"", "\\\"")) + ".*";
 											// always dotall
 											regex = "(?s)" + regex;
 											if (filter.isCaseInsensitive()) {
 												regex = "(?i)" + regex;
+												// for javascript, we embed the string, let's lowercase it here already
+												stringValue = stringValue.toLowerCase();
 											}
-											query += " \"" + regex + "\"";
+											if (!vary) {
+												query += " \"" + regex + "\"";
+											}
+											
+											javascript += stringValue.replace("\"", "\\\"") + "\") >= 0";
 										}
 										else if (value instanceof String) {
-											query += " \"" + ((String) value).replace("\"", "\\\"") + "\"";
+											if (!vary) {
+												query += " \"" + ((String) value).replace("\"", "\\\"") + "\"";
+											}
+											javascript += " \"" + ((String) value).replace("\"", "\\\"") + "\"";
 										}
 										else {
-											query += " " + value;
+											if (!vary) {
+												query += " " + value;
+											}
+											javascript += " " + value;
 										}
 									}
 									// only in and not in
 									else {
-										query += " series(";
+										String objectList = "";
 										for (int j = 0; j < filter.getValues().size(); j++) {
 											Object value = filter.getValues().get(j);
 											if (j > 0) {
-												query += ", ";
+												objectList += ", ";
 											}
 											if (value instanceof String) {
-												query += " \"" + ((String) value).replace("\"", "\\\"") + "\"";
+												objectList += " \"" + ((String) value).replace("\"", "\\\"") + "\"";
 											}
 											else {
-												query += " " + value;
+												objectList += " " + value;
 											}
 										}
-										query += ")";
+										if (!vary) {
+											query += " series(";
+											query += objectList;
+											query += ")";
+										}
+										javascript += " [" + objectList + "].indexOf(" + filter.getKey() + ") " + (operator.equals("?") ? " >= " : " < ") + "0";
 									}
 								}
 								// close the not statement
 								if (inverse) {
-									query += ")";
+									if (!vary) {
+										query += ")";
+									}
+									javascript += ")";
 								}
 								// check if we want to close an or
 								if (i < filters.size() - 1 && openOr && !filters.get(i + 1).isOr()) {
-									query += ")";
+									if (!vary && openQueryOr) {
+										query += ")";
+									}
+									javascript += ")";
 									openOr = false;
+									openQueryOr = false;
 								}
 							}
-							if (openOr) {
+							if (openQueryOr) {
 								query += ")";
+								openQueryOr = false;
+							}
+							if (openOr) {
+								javascript += ")";
 								openOr = false;
 							}
 						}
@@ -642,6 +717,13 @@ public class CRUDListener implements EventHandler<HTTPRequest, HTTPResponse> {
 						if (query != null && !query.isEmpty()) {
 							pairs.add(new KeyValuePairImpl("q", query));
 						}
+						if (javascript != null && !javascript.isEmpty()) {
+							pairs.add(new KeyValuePairImpl("j", javascript));
+						}
+						// no longer needed
+//						if (updateId != null) {
+//							pairs.add(new KeyValuePairImpl("u", updateId));
+//						}
 						if (!pairs.isEmpty()) {
 							jwt.setValues(pairs);
 						}
@@ -665,103 +747,105 @@ public class CRUDListener implements EventHandler<HTTPRequest, HTTPResponse> {
 						// if you want the more secure algorithms, set it explicitly
 						JWTAlgorithm algorithm = key instanceof SecretKey ? JWTAlgorithm.HS256 : JWTAlgorithm.RS256;
 						String encode = JWTUtils.encode(key, jwt, algorithm);
-						responseHeaders.add(new MimeHeader("Stream-Create-Token", encode));
+						responseHeaders.add(new MimeHeader("Stream-Token", encode));
 					}
+					
+					
 					// it only applies to list and get
 					// but for get it only applies if there is actual content
-					if (crudListAction.isBroadcastUpdate() && (service.getType().equals(CRUDType.LIST) || (output != null && output.get("result") != null))) {
-						// TODO: add primary key field to both create token and update token
-						Element<?> primary = CRUDService.getPrimary((ComplexType) type);
-						if (primary != null) {
-							// we capture all the ids involved (or just the one in case of get)
-							// we use a list either way
-							List<Object> ids = new ArrayList<Object>();
-							if (output != null) {
-								if (service.getType().equals(CRUDType.LIST)) {
-									Object object = output.get("results");
-									if (object != null) {
-										for (Object single : (Iterable<?>) object) {
-											if (single == null) {
-												continue;
-											}
-											else if (!(single instanceof ComplexContent)) {
-												single = ComplexContentWrapperFactory.getInstance().getWrapper().wrap(single);
-											}
-											if (single != null) {
-												Object id = ((ComplexContent) single).get(primary.getName());
-												if (id != null) {
-													ids.add(id);
-												}
-											}
-										}
-									}
-								}
-								else {
-									Object object = output.get("result");
-									if (object != null) {
-										if (!(object instanceof ComplexContent)) {
-											object = ComplexContentWrapperFactory.getInstance().getWrapper().wrap(object);
-										}
-										if (object != null) {
-											Object id = ((ComplexContent) object).get(primary.getName());
-											if (id != null) {
-												ids.add(id);
-											}
-										}
-									}
-								}
-							}
-							String query = "";
-							// an id is considered to be numeric or uuid/string/...
-							// all the latter ones are embedded as strings
-							for (Object id : ids) {
-								if (!query.isEmpty()) {
-									query += ", ";
-								}
-								if (!(id instanceof Number)) {
-									query += " \"" + ConverterFactory.getInstance().getConverter().convert(id, String.class).replace("\"", "\\\"") + "\"";
-								}
-								else {
-									query += id;
-								}
-							}
-							query = primary.getName() + " ? series(" + query + ")";
-							
-							JWTBody jwt = new JWTBody();
-							// anonymous data streams are probably not a good idea...
-							jwt.setAud(token == null ? null : token.getAuthenticationId());
-							jwt.setSub(typeId);
-							long time = new Date().getTime();
-							time += 1000l * 60 * 5;
-							jwt.setExp(time / 1000);
-							jwt.setJti(UUID.randomUUID().toString().replace("-", ""));
-							jwt.setValues(Arrays.asList(new KeyValuePairImpl("q", query), new KeyValuePairImpl("p", primary.getName())));
-							Key key;
-							try {
-								key = jwtKeyStore.getKeyStore().getPrivateKey(jwtKeyAlias);
-							}
-							catch (Exception e) {
-								try {
-									key = jwtKeyStore.getKeyStore().getSecretKey(jwtKeyAlias);
-								}
-								catch (Exception f) {
-									throw new RuntimeException("Could not resolve jwt key alias: " + jwtKeyAlias, f);
-								}
-							}
-							if (key == null) {
-								throw new IllegalArgumentException("Can not resolve key '" + jwtKeyAlias + "' in jwt keystore");
-							}
-							
-							// instead of opting for the most secure, we balance overall jwt token size with security
-							// if you want the more secure algorithms, set it explicitly
-							JWTAlgorithm algorithm = key instanceof SecretKey ? JWTAlgorithm.HS256 : JWTAlgorithm.RS256;
-							String encode = JWTUtils.encode(key, jwt, algorithm);
-							responseHeaders.add(new MimeHeader("Stream-Update-Token", encode));
-						}
-						else {
-							logger.warn("Can not create an update stream if no primary key is found");
-						}
-					}
+//					if (crudListAction.isBroadcastUpdate() && (service.getType().equals(CRUDType.LIST) || (output != null && output.get("result") != null))) {
+//						// TODO: add primary key field to both create token and update token
+//						Element<?> primary = CRUDService.getPrimary((ComplexType) type);
+//						if (primary != null) {
+//							// we capture all the ids involved (or just the one in case of get)
+//							// we use a list either way
+//							List<Object> ids = new ArrayList<Object>();
+//							if (output != null) {
+//								if (service.getType().equals(CRUDType.LIST)) {
+//									Object object = output.get("results");
+//									if (object != null) {
+//										for (Object single : (Iterable<?>) object) {
+//											if (single == null) {
+//												continue;
+//											}
+//											else if (!(single instanceof ComplexContent)) {
+//												single = ComplexContentWrapperFactory.getInstance().getWrapper().wrap(single);
+//											}
+//											if (single != null) {
+//												Object id = ((ComplexContent) single).get(primary.getName());
+//												if (id != null) {
+//													ids.add(id);
+//												}
+//											}
+//										}
+//									}
+//								}
+//								else {
+//									Object object = output.get("result");
+//									if (object != null) {
+//										if (!(object instanceof ComplexContent)) {
+//											object = ComplexContentWrapperFactory.getInstance().getWrapper().wrap(object);
+//										}
+//										if (object != null) {
+//											Object id = ((ComplexContent) object).get(primary.getName());
+//											if (id != null) {
+//												ids.add(id);
+//											}
+//										}
+//									}
+//								}
+//							}
+//							String query = "";
+//							// an id is considered to be numeric or uuid/string/...
+//							// all the latter ones are embedded as strings
+//							for (Object id : ids) {
+//								if (!query.isEmpty()) {
+//									query += ", ";
+//								}
+//								if (!(id instanceof Number)) {
+//									query += " \"" + ConverterFactory.getInstance().getConverter().convert(id, String.class).replace("\"", "\\\"") + "\"";
+//								}
+//								else {
+//									query += id;
+//								}
+//							}
+//							query = primary.getName() + " ? series(" + query + ")";
+//							
+//							JWTBody jwt = new JWTBody();
+//							// anonymous data streams are probably not a good idea...
+//							jwt.setAud(token == null ? null : token.getAuthenticationId());
+//							jwt.setSub(typeId);
+//							long time = new Date().getTime();
+//							time += 1000l * 60 * 5;
+//							jwt.setExp(time / 1000);
+//							jwt.setJti(updateId);
+//							jwt.setValues(Arrays.asList(new KeyValuePairImpl("q", query), new KeyValuePairImpl("p", primary.getName())));
+//							Key key;
+//							try {
+//								key = jwtKeyStore.getKeyStore().getPrivateKey(jwtKeyAlias);
+//							}
+//							catch (Exception e) {
+//								try {
+//									key = jwtKeyStore.getKeyStore().getSecretKey(jwtKeyAlias);
+//								}
+//								catch (Exception f) {
+//									throw new RuntimeException("Could not resolve jwt key alias: " + jwtKeyAlias, f);
+//								}
+//							}
+//							if (key == null) {
+//								throw new IllegalArgumentException("Can not resolve key '" + jwtKeyAlias + "' in jwt keystore");
+//							}
+//							
+//							// instead of opting for the most secure, we balance overall jwt token size with security
+//							// if you want the more secure algorithms, set it explicitly
+//							JWTAlgorithm algorithm = key instanceof SecretKey ? JWTAlgorithm.HS256 : JWTAlgorithm.RS256;
+//							String encode = JWTUtils.encode(key, jwt, algorithm);
+//							responseHeaders.add(new MimeHeader("Stream-Update-Token", encode));
+//						}
+//						else {
+//							logger.warn("Can not create an update stream if no primary key is found");
+//						}
+//					}
 				}
 			}
 		}

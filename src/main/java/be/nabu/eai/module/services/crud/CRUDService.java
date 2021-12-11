@@ -383,6 +383,7 @@ public class CRUDService implements DefinedService, WebFragment, RESTFragment, A
 			}
 			// we don't want the ilike statements to make it to the end
 			CRUDFilter newFilter = new CRUDFilter();
+			newFilter.setVary(filter.isVary());
 			newFilter.setKey(filter.getKey());
 			newFilter.setOperator("ilike".equals(filter.getOperator()) ? "like" : filter.getOperator());
 			newFilter.setCaseInsensitive(filter.isCaseInsensitive() || "ilike".equals(filter.getOperator()));
@@ -932,7 +933,8 @@ public class CRUDService implements DefinedService, WebFragment, RESTFragment, A
 	@Override
 	public Map<String, Object> getExtensions() {
 		Map<String, Object> extensions = new HashMap<String, Object>();
-		if (listAction != null && listAction.isBroadcastCreate()) {
+		// create are only relevant for LIST
+		if (listAction != null && listAction.isBroadcastCreate() && getType().equals(CRUDType.LIST)) {
 			extensions.put("stream-create", "true");
 		}
 		if (listAction != null && listAction.isBroadcastUpdate()) {
