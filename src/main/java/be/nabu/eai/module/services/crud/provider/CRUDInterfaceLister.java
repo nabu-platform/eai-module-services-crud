@@ -21,6 +21,9 @@ public class CRUDInterfaceLister implements InterfaceLister {
 					descriptions.add(new InterfaceDescriptionImpl("CRUD", "Create Provider", "be.nabu.eai.module.services.crud.api.CRUDProvider.create"));
 					descriptions.add(new InterfaceDescriptionImpl("CRUD", "Update Provider", "be.nabu.eai.module.services.crud.api.CRUDProvider.update"));
 					descriptions.add(new InterfaceDescriptionImpl("CRUD", "Delete Provider", "be.nabu.eai.module.services.crud.api.CRUDProvider.delete"));
+					descriptions.add(new InterfaceDescriptionImpl("CRUD", "Create Batch Provider", "be.nabu.eai.module.services.crud.api.CRUDProvider.createBatch"));
+					descriptions.add(new InterfaceDescriptionImpl("CRUD", "Update Batch Provider", "be.nabu.eai.module.services.crud.api.CRUDProvider.updateBatch"));
+					descriptions.add(new InterfaceDescriptionImpl("CRUD", "Delete Batch Provider", "be.nabu.eai.module.services.crud.api.CRUDProvider.deleteBatch"));
 					CRUDInterfaceLister.descriptions = descriptions;
 				}
 			}

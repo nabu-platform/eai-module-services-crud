@@ -5,6 +5,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.TreeMap;
 
 import be.nabu.eai.developer.MainController;
 import be.nabu.eai.developer.api.CollectionAction;
@@ -14,6 +15,7 @@ import be.nabu.eai.developer.api.CollectionManagerFactory;
 import be.nabu.eai.developer.api.EntryAcceptor;
 import be.nabu.eai.developer.collection.ApplicationManager;
 import be.nabu.eai.developer.collection.EAICollectionUtils;
+import be.nabu.eai.developer.collection.ProjectManager;
 import be.nabu.eai.developer.util.EAIDeveloperUtils;
 import be.nabu.eai.module.jdbc.pool.JDBCPoolArtifact;
 import be.nabu.eai.module.services.crud.CRUDArtifact;
@@ -48,6 +50,8 @@ import javafx.stage.StageStyle;
 
 public class CRUDCollectionManagerFactory implements CollectionManagerFactory {
 
+	private static final String CRUD_FOLDER = "interactions";
+	
 	@Override
 	public CollectionManager getCollectionManager(Entry entry) {
 		if (entry.isNode() && CRUDArtifact.class.isAssignableFrom(entry.getNode().getArtifactClass())) {
@@ -85,7 +89,7 @@ public class CRUDCollectionManagerFactory implements CollectionManagerFactory {
 	public List<CollectionAction> getActionsFor(Entry entry) {
 		List<CollectionAction> actions = new ArrayList<CollectionAction>();
 		// if it is a valid application, we want to be able to add to it
-		if (MainController.getInstance().newCollectionManager(entry) instanceof ApplicationManager) {
+		if (MainController.getInstance().newCollectionManager(entry) instanceof ApplicationManager || MainController.getInstance().newCollectionManager(entry) instanceof ProjectManager) {
 			actions.add(new CollectionActionImpl(EAICollectionUtils.newActionTile("crud-big.png", "Add Interaction", "Create, read, update and delete database records."), build(entry), new EntryAcceptor() {
 				@Override
 				public boolean accept(Entry entry) {
@@ -147,7 +151,7 @@ public class CRUDCollectionManagerFactory implements CollectionManagerFactory {
 				// we want to be able to add multiple CRUD at once, we use checkboxes
 				// if you already have a CRUD with the type name, we assume you generated it properly and we don't offer it as a possibility anymore
 				VBox options = new VBox();
-				Map<String, CheckBox> boxes = new HashMap<String, CheckBox>();
+				Map<String, CheckBox> boxes = new TreeMap<String, CheckBox>();
 				
 				Label optionsLabel = new Label("Choose your data type");
 				optionsLabel.getStyleClass().add("p");
@@ -163,7 +167,7 @@ public class CRUDCollectionManagerFactory implements CollectionManagerFactory {
 							// we get the name of the parent folder, for a database we assume that is the name of the entire thing (like main)
 							String databaseName = databaseEntry.getParent().getName();
 							// we get the crud folder
-							Entry crud = entry.getChild("crud");
+							Entry crud = entry.getChild(CRUD_FOLDER);
 							// we might not yet have any crud at all
 							if (crud != null) {
 								// we might not have any crud for this database yet
@@ -367,12 +371,13 @@ public class CRUDCollectionManagerFactory implements CollectionManagerFactory {
 			collection.setSubType("crud");
 			((RepositoryEntry) child).setCollection(collection);
 			((RepositoryEntry) child).saveCollection();
+			EAIDeveloperUtils.updated(child.getId());
 		}
 		return child;
 	}
 	
 	private Entry getCrudEntry(RepositoryEntry application) throws IOException {
-		Entry child = EAIDeveloperUtils.mkdir(application, "interactions");
+		Entry child = EAIDeveloperUtils.mkdir(application, CRUD_FOLDER);
 		if (!child.isCollection()) {
 			CollectionImpl collection = new CollectionImpl();
 			collection.setName("Interactions");
@@ -382,6 +387,7 @@ public class CRUDCollectionManagerFactory implements CollectionManagerFactory {
 			collection.setLargeIcon("crud-big.png");
 			((RepositoryEntry) child).setCollection(collection);
 			((RepositoryEntry) child).saveCollection();
+			EAIDeveloperUtils.updated(child.getId());
 		}
 		return child;
 	}

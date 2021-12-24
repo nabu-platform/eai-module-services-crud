@@ -12,7 +12,7 @@ import be.nabu.libs.types.api.DefinedType;
 
 @XmlRootElement(name = "crudProvider")
 public class CRUDProviderConfiguration {
-	private DefinedService listService, createService, updateService, deleteService;
+	private DefinedService listService, createService, updateService, deleteService, createBatchService, updateBatchService, deleteBatchService;
 
 	// a base type, it is currently not enforced but it allows you to indicate which base type you expect to be present through extension
 	private DefinedType baseType;
@@ -57,6 +57,32 @@ public class CRUDProviderConfiguration {
 	public void setDeleteService(DefinedService deleteService) {
 		this.deleteService = deleteService;
 	}
+	
+	@XmlJavaTypeAdapter(value = ArtifactXMLAdapter.class)
+	@InterfaceFilter(implement = "be.nabu.eai.module.services.crud.api.CRUDProvider.createBatch")
+	public DefinedService getCreateBatchService() {
+		return createBatchService;
+	}
+	public void setCreateBatchService(DefinedService createBatchService) {
+		this.createBatchService = createBatchService;
+	}
+	@XmlJavaTypeAdapter(value = ArtifactXMLAdapter.class)
+	@InterfaceFilter(implement = "be.nabu.eai.module.services.crud.api.CRUDProvider.updateBatch")
+	public DefinedService getUpdateBatchService() {
+		return updateBatchService;
+	}
+	public void setUpdateBatchService(DefinedService updateBatchService) {
+		this.updateBatchService = updateBatchService;
+	}
+	@XmlJavaTypeAdapter(value = ArtifactXMLAdapter.class)
+	@InterfaceFilter(implement = "be.nabu.eai.module.services.crud.api.CRUDProvider.deleteBatch")
+	public DefinedService getDeleteBatchService() {
+		return deleteBatchService;
+	}
+	public void setDeleteBatchService(DefinedService deleteBatchService) {
+		this.deleteBatchService = deleteBatchService;
+	}
+	
 	public List<String> getBlacklistedFields() {
 		return blacklistedFields;
 	}

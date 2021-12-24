@@ -12,11 +12,13 @@ import java.util.Set;
 import java.util.UUID;
 
 import be.nabu.eai.module.services.crud.api.CRUDListAction;
+import be.nabu.eai.module.services.crud.api.CRUDProvider;
 import be.nabu.eai.module.services.crud.provider.CRUDMeta;
 import be.nabu.eai.module.web.application.WebApplication;
 import be.nabu.eai.module.web.application.WebFragment;
 import be.nabu.eai.module.web.application.api.PermissionWithRole;
 import be.nabu.eai.module.web.application.api.RESTFragment;
+import be.nabu.eai.repository.EAIRepositoryUtils;
 import be.nabu.eai.repository.util.Filter;
 import be.nabu.libs.artifacts.api.Artifact;
 import be.nabu.libs.artifacts.api.ArtifactWithExceptions;
@@ -44,6 +46,7 @@ import be.nabu.libs.types.api.SimpleType;
 import be.nabu.libs.types.api.Type;
 import be.nabu.libs.types.base.ComplexElementImpl;
 import be.nabu.libs.types.base.SimpleElementImpl;
+import be.nabu.libs.types.base.TypeBaseUtils;
 import be.nabu.libs.types.base.ValueImpl;
 import be.nabu.libs.types.mask.MaskedContent;
 import be.nabu.libs.types.properties.CommentProperty;
@@ -61,6 +64,9 @@ import be.nabu.libs.types.structure.Structure;
 //		-> maybe include an extension requirement in this? basically we say you have to extend a certain document, we list fields from there
 // -> we want additional configuration (perhaps a configuration document that is configured in the provider?)
 // -> for example for CMS nodes you can configure the groups/roles etc
+
+// TODO: provider parameters: allow to fix fill in for a CRUD artifact
+// TODO: provider parameters: allow to fill in via query params? or choose to expose or not
 public class CRUDService implements DefinedService, WebFragment, RESTFragment, ArtifactWithExceptions {
 
 	public static List<String> inputOperators = Arrays.asList("=", "<>", ">", "<", ">=", "<=", "like", "ilike");
@@ -314,6 +320,17 @@ public class CRUDService implements DefinedService, WebFragment, RESTFragment, A
 				
 				serviceInput.set("meta", getMeta());
 				
+				Object providerInput = input.get("provider");
+				// if we have provider input, we must pass it along
+				if (providerInput != null) {
+					if (!(providerInput instanceof ComplexContent)) {
+						providerInput = ComplexContentWrapperFactory.getInstance().getWrapper().wrap(providerInput);
+					}
+					for (Element<?> child : TypeUtils.getAllChildren(((ComplexContent) providerInput).getType())) {
+						serviceInput.set(child.getName(), ((ComplexContent) providerInput).get(child.getName()));
+					}
+				}
+				
 				ServiceRuntime runtime = new ServiceRuntime(service, executionContext);
 				ComplexContent serviceOutput = runtime.run(serviceInput);
 				
@@ -347,7 +364,7 @@ public class CRUDService implements DefinedService, WebFragment, RESTFragment, A
 					break;
 					case UPDATE:
 					case CREATE:
-						artifact.checkBroadcast(executionContext, connectionId, transactionId, (ComplexContent) serviceInput.get("instance"), type == CRUDType.UPDATE);
+						artifact.checkBroadcast(executionContext, connectionId, transactionId, (ComplexContent) serviceInput.get("instance"), type == CRUDType.UPDATE, true);
 					break;
 				}
 				return output;
@@ -443,6 +460,40 @@ public class CRUDService implements DefinedService, WebFragment, RESTFragment, A
 		return id;
 	}
 
+	// the parameters that are added to the input by the implementation service, this can allow for dynamic behavior
+	private Structure providerParameters = null;
+	private boolean providerParametersResolved = false;
+	private Structure getProviderParameters() {
+		if (!providerParametersResolved) {
+			synchronized(this) {
+				if (!providerParametersResolved) {
+					Structure structure = new Structure();
+					structure.setName("provider");
+					List<Element<?>> inputExtensions;
+					switch (type) {
+						case CREATE:
+							inputExtensions = EAIRepositoryUtils.getInputExtensions(artifact.getConfig().getProvider().getConfig().getCreateService(), EAIRepositoryUtils.getMethod(CRUDProvider.class, "create"));
+						break;
+						case UPDATE: 
+							inputExtensions = EAIRepositoryUtils.getInputExtensions(artifact.getConfig().getProvider().getConfig().getCreateService(), EAIRepositoryUtils.getMethod(CRUDProvider.class, "update"));
+						break;
+						case DELETE:
+							inputExtensions = EAIRepositoryUtils.getInputExtensions(artifact.getConfig().getProvider().getConfig().getCreateService(), EAIRepositoryUtils.getMethod(CRUDProvider.class, "delete"));
+						break;
+						default:
+							inputExtensions = EAIRepositoryUtils.getInputExtensions(artifact.getConfig().getProvider().getConfig().getCreateService(), EAIRepositoryUtils.getMethod(CRUDProvider.class, "list"));
+					}
+					for (Element<?> extension : inputExtensions) {
+						structure.add(TypeBaseUtils.clone(extension, structure));
+					}
+					this.providerParameters = inputExtensions.isEmpty() ? null : structure;
+					this.providerParametersResolved = true;
+				}
+			}
+		}
+		return providerParameters;
+	}
+
 	@SuppressWarnings({ "unchecked", "rawtypes" })
 	private Structure getDefinedInput() {
 		if (input == null) {
@@ -532,7 +583,11 @@ public class CRUDService implements DefinedService, WebFragment, RESTFragment, A
 					}
 				break;
 			}
-			
+			Structure providerParameters = getProviderParameters();
+			if (providerParameters != null) {
+				// the provider should not have mandatory inputs?
+				input.add(new ComplexElementImpl("provider", providerParameters, input, new ValueImpl<Integer>(MinOccursProperty.getInstance(), 0)));
+			}
 			this.input = input;
 		}
 		return input;

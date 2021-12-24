@@ -96,7 +96,7 @@ public class CRUDArtifact extends JAXBArtifact<CRUDConfiguration> implements Mou
 		};
 	}
 	
-	public void checkBroadcast(ExecutionContext executionContext, String connectionId, String transactionId, ComplexContent content, boolean update) throws ServiceException {
+	public void checkBroadcast(ExecutionContext executionContext, String connectionId, String transactionId, ComplexContent content, boolean update, boolean propagate) throws ServiceException {
 		// we only continue if you have the broadcast library installed
 		Artifact resolve = getRepository().resolve("nabu.misc.broadcast.Services.fire");
 		if (resolve instanceof DefinedService) {
@@ -179,14 +179,16 @@ public class CRUDArtifact extends JAXBArtifact<CRUDConfiguration> implements Mou
 				}
 			}
 			
-			// we want to look at other CRUDs of the same type and see if they want to fire as well
-			for (CRUDArtifact artifact : getRepository().getArtifacts(CRUDArtifact.class)) {
-				// not this one again!
-				if (getId().equals(artifact.getId())) {
-					continue;
-				}
-				if (getConfig().getCoreType().getId().equals(artifact.getConfig().getCoreType().getId())) {
-					artifact.checkBroadcast(executionContext, connectionId, transactionId, content, update);
+			if (propagate) {
+				// we want to look at other CRUDs of the same type and see if they want to fire as well
+				for (CRUDArtifact artifact : getRepository().getArtifacts(CRUDArtifact.class)) {
+					// not this one again!
+					if (getId().equals(artifact.getId())) {
+						continue;
+					}
+					if (getConfig().getCoreType().getId().equals(artifact.getConfig().getCoreType().getId())) {
+						artifact.checkBroadcast(executionContext, connectionId, transactionId, content, update, false);
+					}
 				}
 			}
 		}

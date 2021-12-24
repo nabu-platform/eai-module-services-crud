@@ -56,4 +56,45 @@ public interface CRUDProvider {
 			@WebParam(name = "changeTracker") String changeTracker,
 			@WebParam(name = "meta") CRUDMeta meta);
 
+	public default void createBatch(@WebParam(name = "connectionId") String connectionId,
+			@WebParam(name = "transactionId") String transactionId,
+			@WebParam(name = "instances") List<Object> objects,
+			@WebParam(name = "language") String language,
+			@WebParam(name = "changeTracker") String changeTracker,
+			@WebParam(name = "typeId") String typeId,
+			@WebParam(name = "meta") CRUDMeta meta) {
+		if (objects != null && !objects.isEmpty()) {
+			for (Object object : objects) {
+				create(connectionId, transactionId, object, language, changeTracker, typeId, meta);
+			}
+		}
+	}
+	
+	public default void updateBatch(@WebParam(name = "connectionId") String connectionId,
+			@WebParam(name = "transactionId") String transactionId,
+			@WebParam(name = "instances") List<Object> objects,
+			@WebParam(name = "language") String language,
+			@WebParam(name = "changeTracker") String changeTracker,
+			@WebParam(name = "typeId") String typeId,
+			@WebParam(name = "meta") CRUDMeta meta) {
+		if (objects != null && !objects.isEmpty()) {
+			for (Object object : objects) {
+				update(connectionId, transactionId, object, language, changeTracker, typeId, meta);
+			}
+		}
+	}
+	
+	public default void deleteBatch(@WebParam(name = "connectionId") String connectionId,
+			@WebParam(name = "transactionId") String transactionId,
+			@WebParam(name = "typeId") String typeId,
+			@WebParam(name = "ids") List<Object> ids,
+			@WebParam(name = "language") String language,
+			@WebParam(name = "changeTracker") String changeTracker,
+			@WebParam(name = "meta") CRUDMeta meta) {
+		if (ids != null && !ids.isEmpty()) {
+			for (Object id : ids) {
+				delete(connectionId, transactionId, typeId, id, language, changeTracker, meta);
+			}
+		}
+	}
 }
