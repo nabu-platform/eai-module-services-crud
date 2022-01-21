@@ -9,4 +9,5 @@ public interface CRUDListAction extends CRUDAction {
 	public void setBlacklistFields(List<String> blacklistFields);
 	public boolean isBroadcastUpdate();
 	public boolean isBroadcastCreate();
+	public Integer getMaxLimit();
 }

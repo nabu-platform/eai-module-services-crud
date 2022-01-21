@@ -1,7 +1,9 @@
 package be.nabu.eai.module.services.crud.collection;
 
 import java.io.IOException;
+import java.text.ParseException;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -16,15 +18,19 @@ import be.nabu.eai.developer.api.EntryAcceptor;
 import be.nabu.eai.developer.collection.ApplicationManager;
 import be.nabu.eai.developer.collection.EAICollectionUtils;
 import be.nabu.eai.developer.collection.ProjectManager;
+import be.nabu.eai.developer.impl.CustomTooltip;
 import be.nabu.eai.developer.util.EAIDeveloperUtils;
 import be.nabu.eai.module.jdbc.pool.JDBCPoolArtifact;
 import be.nabu.eai.module.services.crud.CRUDArtifact;
 import be.nabu.eai.module.services.crud.CRUDArtifactManager;
 import be.nabu.eai.module.services.crud.provider.CRUDProviderArtifact;
+import be.nabu.eai.module.web.application.WebFragmentProvider;
 import be.nabu.eai.repository.CollectionImpl;
 import be.nabu.eai.repository.api.Collection;
 import be.nabu.eai.repository.api.Entry;
+import be.nabu.eai.repository.api.ResourceEntry;
 import be.nabu.eai.repository.resources.RepositoryEntry;
+import be.nabu.libs.artifacts.api.Artifact;
 import be.nabu.libs.artifacts.api.DataSourceProviderArtifact;
 import be.nabu.libs.services.api.DefinedService;
 import be.nabu.libs.types.api.ComplexType;
@@ -37,6 +43,8 @@ import javafx.beans.value.ChangeListener;
 import javafx.beans.value.ObservableValue;
 import javafx.event.ActionEvent;
 import javafx.event.EventHandler;
+import javafx.geometry.Insets;
+import javafx.geometry.Orientation;
 import javafx.scene.control.Button;
 import javafx.scene.control.CheckBox;
 import javafx.scene.control.ComboBox;
@@ -44,6 +52,7 @@ import javafx.scene.layout.HBox;
 import javafx.scene.control.Label;
 import javafx.scene.control.ScrollPane;
 import javafx.scene.control.ScrollPane.ScrollBarPolicy;
+import javafx.scene.control.Separator;
 import javafx.scene.layout.VBox;
 import javafx.stage.Stage;
 import javafx.stage.StageStyle;
@@ -153,6 +162,10 @@ public class CRUDCollectionManagerFactory implements CollectionManagerFactory {
 				VBox options = new VBox();
 				Map<String, CheckBox> boxes = new TreeMap<String, CheckBox>();
 				
+				// we know it's a web application at this point because we are using webfragmentprovider as a spec
+				CheckBox addToApplication = new CheckBox("Add to the web application");
+				new CustomTooltip("If you check this, the interaction will be automatically added into the available web application").install(addToApplication);
+				
 				Label optionsLabel = new Label("Choose your data type");
 				optionsLabel.getStyleClass().add("p");
 				
@@ -202,12 +215,17 @@ public class CRUDCollectionManagerFactory implements CollectionManagerFactory {
 												if (!alreadyTaken.contains(((DefinedType) type).getId())) {
 													CheckBox checkBox = new CheckBox(EAICollectionUtils.getPrettyName(type));
 													boxes.put(((DefinedType) type).getId(), checkBox);
-													options.getChildren().add(checkBox);
+													//options.getChildren().add(checkBox);
 												}
 											}
 										}
 									}
 								}
+							}
+							// the treemap will order the entries alphabetically
+							// that's why we use a second loop to actually add the checkboxes rather than doing it in the loop above
+							for (CheckBox checkBox : boxes.values()) {
+								options.getChildren().add(checkBox);
 							}
 							if (boxes.isEmpty()) {
 								Label label = new Label("You already have a interaction artifact for every available type");
@@ -218,6 +236,26 @@ public class CRUDCollectionManagerFactory implements CollectionManagerFactory {
 							else {
 								options.getChildren().add(0, optionsLabel);
 								create.setDisable(false);
+								
+								// if we are adding it to an application, check if you want to add it to the application as a whole
+								// by default we'll assume yes cause you are making it _in_ the application
+								if (MainController.getInstance().newCollectionManager(entry) instanceof ApplicationManager) {
+									Entry child = entry.getChild("api");
+									if (child != null && child instanceof ResourceEntry && child.isNode()) {
+										try {
+											Artifact artifact = child.getNode().getArtifact();
+											if (artifact instanceof WebFragmentProvider) {
+												addToApplication.setSelected(true);
+												Separator separator = new Separator(Orientation.HORIZONTAL);
+												VBox.setMargin(separator, new Insets(10, 0, 10, 0));
+												options.getChildren().addAll(separator, addToApplication);
+											}
+										}
+										catch (IOException | ParseException e) {
+											e.printStackTrace();
+										}
+									}
+								}
 							}
 						}
 						stage.sizeToScene();
@@ -277,6 +315,8 @@ public class CRUDCollectionManagerFactory implements CollectionManagerFactory {
 						try {
 							Entry crudDatabaseEntry = getCrudDatabaseEntry((RepositoryEntry) entry, databaseEntry);
 							
+							Entry child = null;
+							Artifact api = null;
 							for (Map.Entry<String, CheckBox> box : boxes.entrySet()) {
 								if (box.getValue().isSelected()) {
 									String typeId = box.getKey();
@@ -311,6 +351,12 @@ public class CRUDCollectionManagerFactory implements CollectionManagerFactory {
 										}
 									}
 									
+									// always limit to $user by default!
+									artifact.getConfig().setListRole(new ArrayList<String>(Arrays.asList("$user")));
+									artifact.getConfig().setCreateRole(new ArrayList<String>(Arrays.asList("$user")));
+									artifact.getConfig().setUpdateRole(new ArrayList<String>(Arrays.asList("$user")));
+									artifact.getConfig().setDeleteRole(new ArrayList<String>(Arrays.asList("$user")));
+									
 									artifact.getConfig().setProvider((CRUDProviderArtifact) entry.getRepository().resolve(provider));
 									if (hasChangeTracking) {
 										artifact.getConfig().setChangeTracker((DefinedService) entry.getRepository().resolve("nabu.cms.core.providers.misc.changeTracker"));
@@ -329,6 +375,19 @@ public class CRUDCollectionManagerFactory implements CollectionManagerFactory {
 										crudEntry.saveNode();
 									}
 									EAIDeveloperUtils.created(crudEntry.getId());
+									
+									// if we have to add it to the application, let's do that!
+									if (addToApplication.isSelected()) {
+										try {
+											child = entry.getChild("api");
+											api = child.getNode().getArtifact();
+											((WebFragmentProvider) api).getWebFragments().add(artifact);
+										}
+										catch (Exception e) {
+											MainController.getInstance().notify(e);
+										}
+									}
+									
 									// we hard reload the crud entry to make sure we see the new services
 									Platform.runLater(new Runnable() {
 										@Override
@@ -339,6 +398,12 @@ public class CRUDCollectionManagerFactory implements CollectionManagerFactory {
 										}
 									});
 								}
+							}
+							// if we have updated the api, save it
+							// we only want to save once and send an update signal once rather than for every type you may have selected
+							if (child != null && api != null) {
+								child.getNode().getArtifactManager().newInstance().save((ResourceEntry) child, api);
+								EAIDeveloperUtils.updated(child.getId());
 							}
 						}
 						catch (Exception e) {

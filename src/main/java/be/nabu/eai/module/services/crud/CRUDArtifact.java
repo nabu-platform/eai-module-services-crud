@@ -93,6 +93,10 @@ public class CRUDArtifact extends JAXBArtifact<CRUDConfiguration> implements Mou
 			public boolean isBroadcastCreate() {
 				return getConfig().isBroadcastCreate();
 			}
+			@Override
+			public Integer getMaxLimit() {
+				return getConfig().getMaxLimit();
+			}
 		};
 	}
 	

@@ -451,9 +451,16 @@ public class CRUDArtifactGUIManager extends BaseJAXBGUIManager<CRUDConfiguration
 			main.getChildren().add(foreign);
 		}
 		
+		VBox miscBox = new VBox();
+		miscBox.getStyleClass().addAll("section");
+		label = new Label("Miscellaneous");
+		label.getStyleClass().add("h1");
+		miscBox.getChildren().add(label);
+		
 		// we can only broadcast if we have the service, don't offer the option otherwise
 		if (resolve != null) {
 			VBox broadcast = new VBox();
+			broadcast.getStyleClass().addAll("section");
 			label = new Label("Broadcast");
 			label.getStyleClass().add("h1");
 			broadcast.getChildren().add(label);

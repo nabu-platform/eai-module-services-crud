@@ -76,6 +76,9 @@ public class CRUDConfiguration {
 	// the name is necessary for some things like permissions, components...
 	// if none is set, we assume the root name of the document
 	private String basePath, name;
+	
+	// you can configure a max limit
+	private Integer maxLimit;
 
 	@InterfaceFilter(implement = "be.nabu.libs.services.jdbc.api.ChangeTracker.track")
 	@XmlJavaTypeAdapter(value = ArtifactXMLAdapter.class)
@@ -240,5 +243,11 @@ public class CRUDConfiguration {
 	public void setBroadcastUpdate(boolean broadcastUpdate) {
 		this.broadcastUpdate = broadcastUpdate;
 	}
-	
+	public Integer getMaxLimit() {
+		return maxLimit;
+	}
+	public void setMaxLimit(Integer maxLimit) {
+		this.maxLimit = maxLimit;
+	}
+
 }

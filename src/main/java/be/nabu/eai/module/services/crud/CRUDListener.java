@@ -613,6 +613,9 @@ public class CRUDListener implements EventHandler<HTTPRequest, HTTPResponse> {
 								if (isMultipleValues || isSingleValue) {
 									if (!isMultipleValues) {
 										Object value = filter.getValues().get(0);
+										if (value instanceof UUID || value instanceof Date || value instanceof URI) {
+											value = ConverterFactory.getInstance().getConverter().convert(value, String.class);
+										}
 										if (operator.equals("~")) {
 											// escape the double quotes
 											String stringValue = ConverterFactory.getInstance().getConverter().convert(value, String.class);
@@ -648,6 +651,9 @@ public class CRUDListener implements EventHandler<HTTPRequest, HTTPResponse> {
 										String objectList = "";
 										for (int j = 0; j < filter.getValues().size(); j++) {
 											Object value = filter.getValues().get(j);
+											if (value instanceof UUID || value instanceof Date || value instanceof URI) {
+												value = ConverterFactory.getInstance().getConverter().convert(value, String.class);
+											}
 											if (j > 0) {
 												objectList += ", ";
 											}

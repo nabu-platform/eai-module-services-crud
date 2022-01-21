@@ -305,7 +305,13 @@ public class CRUDService implements DefinedService, WebFragment, RESTFragment, A
 						if (artifact.getConfig().isUseLanguage()) {
 							serviceInput.set("language", language);
 						}
-						serviceInput.set("limit", input == null ? null : input.get("limit"));
+						// we set the max limit if none is provided
+						// the max limit itself can be null
+						Integer limit = input == null ? null : (Integer) input.get("limit");
+						if (listAction.getMaxLimit() != null) {
+							limit = limit == null ? listAction.getMaxLimit() : Math.min(limit, listAction.getMaxLimit());
+						}
+						serviceInput.set("limit", limit);
 						serviceInput.set("offset", input == null ? null : input.get("offset"));
 						serviceInput.set("orderBy", input == null ? null : input.get("orderBy"));
 						serviceInput.set("limitToUser", input == null ? null : input.get("limitToUser"));
@@ -343,7 +349,11 @@ public class CRUDService implements DefinedService, WebFragment, RESTFragment, A
 							}
 							// if we have a total row count, build the page object
 							if (result.getTotalRowCount() != null) {
-								output.set("page", Page.build(result.getTotalRowCount(), input == null ? null : (Long) input.get("offset"), input == null ? null : (Integer) input.get("limit")));
+								Integer limit = input == null ? null : (Integer) input.get("limit");
+								if (listAction.getMaxLimit() != null) {
+									limit = limit == null ? listAction.getMaxLimit() : Math.min(limit, listAction.getMaxLimit());
+								}
+								output.set("page", Page.build(result.getTotalRowCount(), input == null ? null : (Long) input.get("offset"), limit));
 							}
 							else {
 								Long rowCount = result.getRowCount();

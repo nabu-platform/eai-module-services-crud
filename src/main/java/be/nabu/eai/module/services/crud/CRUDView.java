@@ -14,6 +14,7 @@ public class CRUDView implements CRUDListAction {
 	private String name;
 	private CRUDType type;
 	private boolean broadcastUpdate, broadcastCreate;
+	private Integer maxLimit;
 	
 	public List<String> getRoles() {
 		return roles;
@@ -64,5 +65,11 @@ public class CRUDView implements CRUDListAction {
 	}
 	public void setBroadcastCreate(boolean broadcastCreate) {
 		this.broadcastCreate = broadcastCreate;
+	}
+	public Integer getMaxLimit() {
+		return maxLimit;
+	}
+	public void setMaxLimit(Integer maxLimit) {
+		this.maxLimit = maxLimit;
 	}
 }
