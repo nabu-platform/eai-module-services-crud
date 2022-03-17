@@ -485,13 +485,13 @@ public class CRUDService implements DefinedService, WebFragment, RESTFragment, A
 							inputExtensions = EAIRepositoryUtils.getInputExtensions(artifact.getConfig().getProvider().getConfig().getCreateService(), EAIRepositoryUtils.getMethod(CRUDProvider.class, "create"));
 						break;
 						case UPDATE: 
-							inputExtensions = EAIRepositoryUtils.getInputExtensions(artifact.getConfig().getProvider().getConfig().getCreateService(), EAIRepositoryUtils.getMethod(CRUDProvider.class, "update"));
+							inputExtensions = EAIRepositoryUtils.getInputExtensions(artifact.getConfig().getProvider().getConfig().getUpdateService(), EAIRepositoryUtils.getMethod(CRUDProvider.class, "update"));
 						break;
 						case DELETE:
-							inputExtensions = EAIRepositoryUtils.getInputExtensions(artifact.getConfig().getProvider().getConfig().getCreateService(), EAIRepositoryUtils.getMethod(CRUDProvider.class, "delete"));
+							inputExtensions = EAIRepositoryUtils.getInputExtensions(artifact.getConfig().getProvider().getConfig().getDeleteService(), EAIRepositoryUtils.getMethod(CRUDProvider.class, "delete"));
 						break;
 						default:
-							inputExtensions = EAIRepositoryUtils.getInputExtensions(artifact.getConfig().getProvider().getConfig().getCreateService(), EAIRepositoryUtils.getMethod(CRUDProvider.class, "list"));
+							inputExtensions = EAIRepositoryUtils.getInputExtensions(artifact.getConfig().getProvider().getConfig().getListService(), EAIRepositoryUtils.getMethod(CRUDProvider.class, "list"));
 					}
 					for (Element<?> extension : inputExtensions) {
 						structure.add(TypeBaseUtils.clone(extension, structure));
