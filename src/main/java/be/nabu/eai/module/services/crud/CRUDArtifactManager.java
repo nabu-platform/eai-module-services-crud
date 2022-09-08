@@ -264,6 +264,9 @@ public class CRUDArtifactManager extends JAXBArtifactManager<CRUDConfiguration, 
 						Value<String> property = element.getProperty(ForeignKeyProperty.getInstance());
 						if (property != null && property.getValue() != null) {
 							String[] split2 = property.getValue().split(":");
+							if (split2.length < 2) {
+								throw new IllegalStateException("The foreign key is not correct, perhaps you forgot to indicate a field: " + property.getValue());
+							}
 							Artifact resolve = repository.resolve(split2[0]);
 							if (resolve instanceof ComplexType) {
 								targetElement = ((ComplexType) resolve).get(i == split.length - 2 ? split[i + 1] : split2[1]);

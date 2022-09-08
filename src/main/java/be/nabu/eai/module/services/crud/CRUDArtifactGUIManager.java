@@ -815,7 +815,7 @@ public class CRUDArtifactGUIManager extends BaseJAXBGUIManager<CRUDConfiguration
 	public static void drawForeignNameFields(List<ForeignNameField> foreignFields, DefinedType coreType, Repository repository, VBox main) {
 		Map<String, String> foreignKeys = getForeignKeys((ComplexType) coreType);
 		// you need at least some foreign keys in your current table to do this
-		if (!foreignKeys.isEmpty()) {
+		//if (!foreignKeys.isEmpty()) {
 			Label foreign = new Label("Import Fields");
 			foreign.getStyleClass().add("h1");
 			main.getChildren().add(foreign);
@@ -827,7 +827,7 @@ public class CRUDArtifactGUIManager extends BaseJAXBGUIManager<CRUDConfiguration
 			VBox vbox = new VBox();
 			main.getChildren().add(vbox);
 			drawExistingFields(foreignFields, coreType, repository, vbox);
-		}
+		//}
 	}
 	
 	private static void drawExistingFields(List<ForeignNameField> foreignFields, DefinedType coreType, Repository repository, VBox main) {

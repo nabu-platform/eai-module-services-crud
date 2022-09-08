@@ -16,6 +16,7 @@ import be.nabu.eai.module.services.crud.api.CRUDProvider;
 import be.nabu.eai.module.services.crud.provider.CRUDMeta;
 import be.nabu.eai.module.web.application.WebApplication;
 import be.nabu.eai.module.web.application.WebFragment;
+import be.nabu.eai.module.web.application.api.DownloadableFragment;
 import be.nabu.eai.module.web.application.api.PermissionWithRole;
 import be.nabu.eai.module.web.application.api.RESTFragment;
 import be.nabu.eai.repository.EAIRepositoryUtils;
@@ -67,10 +68,16 @@ import be.nabu.libs.types.structure.Structure;
 
 // TODO: provider parameters: allow to fix fill in for a CRUD artifact
 // TODO: provider parameters: allow to fill in via query params? or choose to expose or not
-public class CRUDService implements DefinedService, WebFragment, RESTFragment, ArtifactWithExceptions {
+public class CRUDService implements DefinedService, WebFragment, RESTFragment, ArtifactWithExceptions, DownloadableFragment {
 
 	public static List<String> inputOperators = Arrays.asList("=", "<>", ">", "<", ">=", "<=", "like", "ilike");
 	public static List<String> operators = Arrays.asList("=", "<>", ">", "<", ">=", "<=", "is null", "is not null", "like", "ilike");
+	
+	public enum TotalCount {
+		EXACT,
+		ESTIMATE,
+		NONE
+	}
 	
 	private String id;
 	private CRUDType type;
@@ -160,6 +167,7 @@ public class CRUDService implements DefinedService, WebFragment, RESTFragment, A
 				ComplexContent output = getServiceInterface().getOutputDefinition().newInstance();
 				ComplexContent serviceInput = null;
 				Object object;
+				MaskedContent createInstance = null;
 				switch(type) {
 					case CREATE:
 						object = input == null ? null : input.get("instance");
@@ -170,7 +178,7 @@ public class CRUDService implements DefinedService, WebFragment, RESTFragment, A
 						}
 						serviceInput = artifact.getConfig().getProvider().getConfig().getCreateService().getServiceInterface().getInputDefinition().newInstance();
 						// we might need to generate some new values
-						MaskedContent createInstance = new MaskedContent((ComplexContent) object, (ComplexType) artifact.getConfig().getCoreType());
+						createInstance = new MaskedContent((ComplexContent) object, (ComplexType) artifact.getConfig().getCoreType());
 						for (Element<?> element : TypeUtils.getAllChildren((ComplexType) artifact.getConfig().getCoreType())) {
 							Value<Integer> minOccurs = element.getProperty(MinOccursProperty.getInstance());
 							Value<Boolean> generated = element.getProperty(GeneratedProperty.getInstance());
@@ -183,7 +191,12 @@ public class CRUDService implements DefinedService, WebFragment, RESTFragment, A
 								Value<Boolean> primary = element.getProperty(PrimaryKeyProperty.getInstance());
 								// if we have a primary key, we can generate a uuid (if it is a uuid)
 								if (primary != null && primary.getValue() != null && primary.getValue()) {
-									if (UUID.class.isAssignableFrom(((SimpleType<?>) element.getType()).getInstanceClass())) {
+									// check if you added an id to the input
+									Object providedId = input == null ? null : input.get("id");
+									if (providedId != null) {
+										createInstance.set(element.getName(), providedId);
+									}
+									else if (UUID.class.isAssignableFrom(((SimpleType<?>) element.getType()).getInstanceClass())) {
 										createInstance.set(element.getName(), UUID.randomUUID());
 									}
 									else if (String.class.isAssignableFrom(((SimpleType<?>) element.getType()).getInstanceClass())) {
@@ -213,7 +226,10 @@ public class CRUDService implements DefinedService, WebFragment, RESTFragment, A
 						serviceInput.set("typeId", artifact.getConfig().getCoreType().getId());
 						serviceInput.set("changeTracker", artifact.getConfig().getChangeTracker() == null ? null : artifact.getConfig().getChangeTracker().getId());
 						
-						output.set("created", new MaskedContent(createInstance, createOutput));
+						// note that currently this does _not_ work with generated primary keys because we don't feed them back into the end result yet
+						if (!artifact.getConfig().isUseListOutputForCreate()) {
+							output.set("created", new MaskedContent(createInstance, createOutput));
+						}
 					break;
 					case UPDATE:
 						object = input == null ? null : input.get("instance");
@@ -255,7 +271,9 @@ public class CRUDService implements DefinedService, WebFragment, RESTFragment, A
 						}
 						serviceInput.set("changeTracker", artifact.getConfig().getChangeTracker() == null ? null : artifact.getConfig().getChangeTracker().getId());
 						
-						output.set("updated", new MaskedContent(updateInstance, updateOutput));
+						if (!artifact.getConfig().isUseListOutputForUpdate()) {
+							output.set("updated", new MaskedContent(updateInstance, updateOutput));
+						}
 					break;
 					case DELETE:
 						serviceInput = artifact.getConfig().getProvider().getConfig().getDeleteService().getServiceInterface().getInputDefinition().newInstance();
@@ -279,6 +297,8 @@ public class CRUDService implements DefinedService, WebFragment, RESTFragment, A
 						serviceInput.set("typeId", singleOutput.getId());
 						serviceInput.set("connectionId", connectionId);
 						serviceInput.set("transactionId", transactionId);
+						// don't count when we are getting!
+						serviceInput.set("totalCount", TotalCount.NONE);
 						if (artifact.getConfig().isUseLanguage()) {
 							serviceInput.set("language", language);
 						}
@@ -311,8 +331,10 @@ public class CRUDService implements DefinedService, WebFragment, RESTFragment, A
 						if (listAction.getMaxLimit() != null) {
 							limit = limit == null ? listAction.getMaxLimit() : Math.min(limit, listAction.getMaxLimit());
 						}
+						TotalCount totalCount = input == null ? null : (TotalCount) input.get("totalCount");
 						serviceInput.set("limit", limit);
 						serviceInput.set("offset", input == null ? null : input.get("offset"));
+						serviceInput.set("totalCount", totalCount == null ? TotalCount.EXACT : totalCount);
 						serviceInput.set("orderBy", input == null ? null : input.get("orderBy"));
 						serviceInput.set("limitToUser", input == null ? null : input.get("limitToUser"));
 						serviceInput.set("lazy", input == null ? null : input.get("lazy"));
@@ -377,10 +399,43 @@ public class CRUDService implements DefinedService, WebFragment, RESTFragment, A
 						artifact.checkBroadcast(executionContext, connectionId, transactionId, (ComplexContent) serviceInput.get("instance"), type == CRUDType.UPDATE, true);
 					break;
 				}
+				if (type == CRUDType.UPDATE && artifact.getConfig().isUseListOutputForUpdate()) {
+					Object updateId = input == null ? null : input.get("id");
+					output.set("updated", getSingleResult(executionContext, updateId, connectionId, transactionId, language));
+				}
+				else if (type == CRUDType.CREATE && artifact.getConfig().isUseListOutputForCreate()) {
+					output.set("created", getSingleResult(executionContext, getPrimaryKey(createInstance), connectionId, transactionId, language));
+				}
 				return output;
 			}
 
 		};
+	}
+	
+	private Object getPrimaryKey(ComplexContent content) {
+		Element<?> primary = getPrimary((ComplexType) artifact.getConfig().getCoreType());
+		return content.get(primary.getName());
+	}
+	
+	private Object getSingleResult(ExecutionContext context, Object primary, String connectionId, String transactionId, String language) throws ServiceException {
+		if (primary == null) {
+			throw new IllegalStateException("Primary key is empty, we can not return the requested result");
+		}
+		String getId = artifact.getId() + ".services.get";
+		DefinedService resolve = (DefinedService) artifact.getRepository().resolve(getId);
+		if (resolve == null) {
+			throw new IllegalStateException("Could not resolve get service: " + getId);
+		}
+		ServiceRuntime serviceRuntime = new ServiceRuntime(resolve, context);
+		ComplexContent input = resolve.getServiceInterface().getInputDefinition().newInstance();
+		input.set("id", primary);
+		input.set("connectionId", connectionId);
+		input.set("transactionId", transactionId);
+		if (input.getType().get("language") != null && language != null) {
+			input.set("language", language);
+		}
+		ComplexContent output = serviceRuntime.run(input);
+		return output.get("result");
 	}
 	
 	private CRUDMeta getMeta() {
@@ -526,6 +581,10 @@ public class CRUDService implements DefinedService, WebFragment, RESTFragment, A
 						}
 						input.add(parentElement);
 					}
+					// we want to give you an option to prefill the primary key (in case you want a specific id)
+					if (primary != null) {
+						input.add(new SimpleElementImpl("id", (SimpleType<?>) primary.getType(), input, new ValueImpl<Integer>(MinOccursProperty.getInstance(), 0)));
+					}
 					input.add(new ComplexElementImpl("instance", createInput, input));
 				break;
 				case UPDATE:
@@ -556,6 +615,7 @@ public class CRUDService implements DefinedService, WebFragment, RESTFragment, A
 					input.add(new SimpleElementImpl<String>("orderBy", SimpleTypeWrapperFactory.getInstance().getWrapper().wrap(String.class), input, new ValueImpl<Integer>(MinOccursProperty.getInstance(), 0), new ValueImpl<Integer>(MaxOccursProperty.getInstance(), 0)));
 					input.add(new SimpleElementImpl<Boolean>("limitToUser", SimpleTypeWrapperFactory.getInstance().getWrapper().wrap(Boolean.class), input, new ValueImpl<Integer>(MinOccursProperty.getInstance(), 0), new ValueImpl<String>(CommentProperty.getInstance(), "If you enable this, the provider should try to limit the result set to data that the current user is allowed to see")));
 					input.add(new SimpleElementImpl<Boolean>("lazy", SimpleTypeWrapperFactory.getInstance().getWrapper().wrap(Boolean.class), input, new ValueImpl<Integer>(MinOccursProperty.getInstance(), 0), new ValueImpl<String>(CommentProperty.getInstance(), "If you enable lazy mode, the provider will try to provide a lazy list, if it can not, a full list might be returned")));
+					input.add(new SimpleElementImpl<TotalCount>("totalCount", SimpleTypeWrapperFactory.getInstance().getWrapper().wrap(TotalCount.class), input, new ValueImpl<Integer>(MinOccursProperty.getInstance(), 0), new ValueImpl<String>(CommentProperty.getInstance(), "By default all results will be counted exactly. This can have a lot of performance impact in some cases. An estimated count is faster but not exact or you can turn counting off entirely.")));
 					if (listAction.getFilters() != null) {
 						Structure filters = new Structure();
 						filters.setName("filter");
@@ -631,10 +691,20 @@ public class CRUDService implements DefinedService, WebFragment, RESTFragment, A
 			
 			switch(type) {
 				case CREATE:
-					output.add(new ComplexElementImpl("created", createOutput, output));
+					if (artifact.getConfig().isUseListOutputForCreate()) {
+						output.add(new ComplexElementImpl("created", singleOutput, output));
+					}
+					else {
+						output.add(new ComplexElementImpl("created", createOutput, output));
+					}
 				break;
 				case UPDATE:
-					output.add(new ComplexElementImpl("updated", updateOutput, output));
+					if (artifact.getConfig().isUseListOutputForUpdate()) {
+						output.add(new ComplexElementImpl("updated", singleOutput, output));
+					}
+					else {
+						output.add(new ComplexElementImpl("updated", updateOutput, output));
+					}
 				break;
 				case LIST:
 					output.setSuperType(outputList);
@@ -1006,6 +1076,11 @@ public class CRUDService implements DefinedService, WebFragment, RESTFragment, A
 			extensions.put("stream-update", "true");
 		}
 		return extensions;
+	}
+
+	@Override
+	public boolean isDownloadable() {
+		return type == CRUDType.LIST && artifact.getConfig().isAllowHeaderAsQueryParameter();
 	}
 	
 }

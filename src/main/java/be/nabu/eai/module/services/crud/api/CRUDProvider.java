@@ -6,6 +6,7 @@ import javax.jws.WebParam;
 import javax.jws.WebResult;
 
 import be.nabu.eai.module.services.crud.CRUDFilter;
+import be.nabu.eai.module.services.crud.CRUDService.TotalCount;
 import be.nabu.eai.module.services.crud.ListResult;
 import be.nabu.eai.module.services.crud.provider.CRUDMeta;
 
@@ -18,7 +19,8 @@ public interface CRUDProvider {
 			// the id of the type we are querying
 			@WebParam(name = "typeId") String typeId,
 			@WebParam(name = "limit") Integer limit, 
-			@WebParam(name = "offset") Long offset, 
+			@WebParam(name = "offset") Long offset,
+			@WebParam(name = "totalCount") TotalCount totalCount,
 			@WebParam(name = "orderBy") List<String> orderBy, 
 			@WebParam(name = "filters") List<CRUDFilter> filters,
 			@WebParam(name = "language") String language,

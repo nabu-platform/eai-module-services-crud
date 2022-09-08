@@ -43,6 +43,9 @@ public class CRUDConfiguration {
 	
 	private boolean broadcastCreate, broadcastUpdate;
 	
+	// when you run a create or update, do you want the created result back or a full get result? depending on the blacklisting and/or importing these can be vastly different
+	private boolean useListOutputForCreate, useListOutputForUpdate;
+	
 	private List<CRUDView> views;
 
 	private boolean allowHeaderAsQueryParameter = true;
@@ -248,6 +251,18 @@ public class CRUDConfiguration {
 	}
 	public void setMaxLimit(Integer maxLimit) {
 		this.maxLimit = maxLimit;
+	}
+	public boolean isUseListOutputForCreate() {
+		return useListOutputForCreate;
+	}
+	public void setUseListOutputForCreate(boolean useListOutputForCreate) {
+		this.useListOutputForCreate = useListOutputForCreate;
+	}
+	public boolean isUseListOutputForUpdate() {
+		return useListOutputForUpdate;
+	}
+	public void setUseListOutputForUpdate(boolean useListOutputForUpdate) {
+		this.useListOutputForUpdate = useListOutputForUpdate;
 	}
 
 }
