@@ -13,6 +13,7 @@ import be.nabu.eai.repository.jaxb.ArtifactXMLAdapter;
 import be.nabu.libs.artifacts.api.DataSourceProviderArtifact;
 import be.nabu.libs.services.api.DefinedService;
 import be.nabu.libs.types.api.DefinedType;
+import be.nabu.libs.types.api.annotation.Field;
 
 @XmlRootElement(name = "crud")
 public class CRUDConfiguration {
@@ -64,6 +65,9 @@ public class CRUDConfiguration {
 	
 	// the field we want to use to check security context
 	private String securityContextField;
+	
+	// you can configure the rest service to use the current service context as the permission context for security checks
+	private boolean useServiceContextAsPermissionContext, useWebApplicationAsPermissionContext;
 	
 	// we can also set roles
 	private List<String> createRole, updateRole, listRole, deleteRole;
@@ -120,12 +124,26 @@ public class CRUDConfiguration {
 	public void setUpdateBlacklistFields(List<String> updateFields) {
 		this.updateBlacklistFields = updateFields;
 	}
-
+	@Field(hide = "useServiceContextAsPermissionContext == true || useWebApplicationAsPermissionContext == true")
 	public String getSecurityContextField() {
 		return securityContextField;
 	}
 	public void setSecurityContextField(String securityContextField) {
 		this.securityContextField = securityContextField;
+	}
+	@Field(hide = "securityContextField != null || useWebApplicationAsPermissionContext == true")
+	public boolean isUseServiceContextAsPermissionContext() {
+		return useServiceContextAsPermissionContext;
+	}
+	public void setUseServiceContextAsPermissionContext(boolean useServiceContextAsPermissionContext) {
+		this.useServiceContextAsPermissionContext = useServiceContextAsPermissionContext;
+	}
+	@Field(hide = "useServiceContextAsPermissionContext == true || securityContextField != null")
+	public boolean isUseWebApplicationAsPermissionContext() {
+		return useWebApplicationAsPermissionContext;
+	}
+	public void setUseWebApplicationAsPermissionContext(boolean useWebApplicationAsPermissionContext) {
+		this.useWebApplicationAsPermissionContext = useWebApplicationAsPermissionContext;
 	}
 	public List<String> getCreateRole() {
 		return createRole;

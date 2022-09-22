@@ -1007,6 +1007,11 @@ public class CRUDService implements DefinedService, WebFragment, RESTFragment, A
 					}
 				}
 			}
+			// if we want to support downloads, we probably need OTP
+			if (artifact.getConfig().isAllowHeaderAsQueryParameter()) {
+				parameters.add(new SimpleElementImpl<String>("downloadAuthenticationId", SimpleTypeWrapperFactory.getInstance().getWrapper().wrap(String.class), input, new ValueImpl<Integer>(MinOccursProperty.getInstance(), 0), new ValueImpl<Integer>(MaxOccursProperty.getInstance(), 1)));
+				parameters.add(new SimpleElementImpl<String>("downloadSecret", SimpleTypeWrapperFactory.getInstance().getWrapper().wrap(String.class), input, new ValueImpl<Integer>(MinOccursProperty.getInstance(), 0), new ValueImpl<Integer>(MaxOccursProperty.getInstance(), 1)));
+			}
 		}
 		else if (type == CRUDType.UPDATE && artifact.getConfig().isUseLanguage() && artifact.getConfig().isUseExplicitLanguage()) {
 			Structure input = new Structure();
@@ -1081,6 +1086,21 @@ public class CRUDService implements DefinedService, WebFragment, RESTFragment, A
 	@Override
 	public boolean isDownloadable() {
 		return type == CRUDType.LIST && artifact.getConfig().isAllowHeaderAsQueryParameter();
+	}
+
+	@Override
+	public String getDownloadAuthenticationIdParameter() {
+		return "downloadAuthenticationId";
+	}
+
+	@Override
+	public String getDownloadSecretParameter() {
+		return "downloadSecret";
+	}
+
+	@Override
+	public String getDownloadCorrelationIdParameter() {
+		return null;
 	}
 	
 }

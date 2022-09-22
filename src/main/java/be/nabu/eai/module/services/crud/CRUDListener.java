@@ -20,23 +20,28 @@ import javax.crypto.SecretKey;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.hazelcast.client.impl.protocol.task.GetPartitionsMessageTask;
-
 import be.nabu.eai.module.keystore.KeyStoreArtifact;
 import be.nabu.eai.module.rest.RESTUtils;
 import be.nabu.eai.module.services.crud.CRUDService.CRUDType;
 import be.nabu.eai.module.services.crud.api.CRUDListAction;
+import be.nabu.eai.module.web.application.TemporaryAuthenticationImpl;
 import be.nabu.eai.module.web.application.WebApplication;
 import be.nabu.eai.module.web.application.WebApplicationUtils;
+import be.nabu.eai.module.web.application.api.TemporaryAuthenticator;
 import be.nabu.eai.repository.api.LanguageProvider;
 import be.nabu.eai.repository.util.Filter;
-import be.nabu.libs.artifacts.api.Artifact;
 import be.nabu.libs.authentication.api.Authenticator;
 import be.nabu.libs.authentication.api.Device;
 import be.nabu.libs.authentication.api.PermissionHandler;
 import be.nabu.libs.authentication.api.PotentialPermissionHandler;
 import be.nabu.libs.authentication.api.Token;
 import be.nabu.libs.converter.ConverterFactory;
+import be.nabu.libs.evaluator.EvaluationException;
+import be.nabu.libs.evaluator.PathAnalyzer;
+import be.nabu.libs.evaluator.QueryParser;
+import be.nabu.libs.evaluator.impl.VariableOperation;
+import be.nabu.libs.evaluator.types.api.TypeOperation;
+import be.nabu.libs.evaluator.types.operations.TypesOperationProvider;
 import be.nabu.libs.events.api.EventHandler;
 import be.nabu.libs.http.HTTPCodes;
 import be.nabu.libs.http.HTTPException;
@@ -140,10 +145,36 @@ public class CRUDListener implements EventHandler<HTTPRequest, HTTPResponse> {
 			
 			token = WebApplicationUtils.getToken(application, request);
 			device = WebApplicationUtils.getDevice(application, request, token);
-
 			ServiceRuntime.getGlobalContext().put("device", device);
 			ServiceRuntime.getGlobalContext().put("service.context", application.getId());
 			
+			// if we don't have a token, but we are doing the download
+			if (token == null && artifact.getConfig().isAllowHeaderAsQueryParameter()) {
+				TemporaryAuthenticator temporaryAuthenticator = application.getTemporaryAuthenticator();
+				// and we have a temporary authenticator
+				// check for shared secrets (preferably otp) 
+				if (temporaryAuthenticator != null) {
+					String downloadAuthenticationIdParameter = service.getDownloadAuthenticationIdParameter();
+					String downloadSecretParameter = service.getDownloadSecretParameter();
+					String downloadCorrelationIdParameter = service.getDownloadCorrelationIdParameter();
+					List<String> correlationIdList = downloadCorrelationIdParameter == null ? null : queryProperties.get(downloadCorrelationIdParameter);
+					List<String> secretList = downloadSecretParameter == null ? null : queryProperties.get(downloadSecretParameter);
+					List<String> authenticationIdList = downloadAuthenticationIdParameter == null ? null : queryProperties.get(downloadAuthenticationIdParameter);
+					String downloadCorrelationId = correlationIdList == null || correlationIdList.isEmpty() ? null : correlationIdList.get(0);
+					String downloadSecret = secretList == null || secretList.isEmpty() ? null : secretList.get(0);
+					String downloadAuthenticationId = authenticationIdList == null || authenticationIdList.isEmpty() ? null : authenticationIdList.get(0);
+					// check for specific
+					Token temporaryToken = temporaryAuthenticator.authenticate(application.getRealm(), new TemporaryAuthenticationImpl(downloadAuthenticationId, downloadSecret), device, TemporaryAuthenticator.EXECUTION + ":" + service.getId(), downloadCorrelationId);
+					// check for generic
+					if (temporaryToken == null) {
+						temporaryToken = temporaryAuthenticator.authenticate(application.getRealm(), new TemporaryAuthenticationImpl(downloadAuthenticationId, downloadSecret), device, TemporaryAuthenticator.EXECUTION, downloadCorrelationId);
+					}
+					if (temporaryToken != null) {
+						token = temporaryToken;
+					}
+				}
+			}
+
 			switch (service.getType()) {
 				case CREATE: 
 					if (artifact.getConfig().getCreateRole() != null) {
@@ -218,11 +249,18 @@ public class CRUDListener implements EventHandler<HTTPRequest, HTTPResponse> {
 			ExecutionContext newExecutionContext = application.getRepository().newExecutionContext(token);
 			List<Header> headers = new ArrayList<Header>();
 			
-			ComplexContent output = call(newExecutionContext, token, uri, queryProperties, body, WebApplicationUtils.getLanguage(application, request), headers);
+			ComplexContent output = call(request, newExecutionContext, token, uri, queryProperties, body, WebApplicationUtils.getLanguage(application, request), headers);
 			
+			// we want the root in the response, not the wrapper element
 			switch (service.getType()) {
 				case GET:
 					output = output == null ? null : (ComplexContent) output.get("result");
+				break;
+				case CREATE:
+					output = output == null ? null : (ComplexContent) output.get("created");
+				break;
+				case UPDATE:
+					output = output == null ? null : (ComplexContent) output.get("updated");
 				break;
 			}
 
@@ -305,7 +343,7 @@ public class CRUDListener implements EventHandler<HTTPRequest, HTTPResponse> {
 		}
 	}
 
-	public ComplexContent call(ExecutionContext context, Token token, URI uri, Map<String, List<String>> queryProperties, ComplexContent body, String language, List<Header> responseHeaders) throws ServiceException, IOException {
+	public ComplexContent call(HTTPRequest request, ExecutionContext context, Token token, URI uri, Map<String, List<String>> queryProperties, ComplexContent body, String language, List<Header> responseHeaders) throws ServiceException, IOException {
 		String path = URIUtils.normalize(uri.getPath());
 		// not in this web artifact
 		if (!path.startsWith(parentPath)) {
@@ -319,10 +357,37 @@ public class CRUDListener implements EventHandler<HTTPRequest, HTTPResponse> {
 		if (analyzed == null) {
 			return null;
 		}
-		return call(context, token, queryProperties, analyzed, body, language, responseHeaders);
+		return call(request, context, token, queryProperties, analyzed, body, language, responseHeaders);
 	}
 	
-	private ComplexContent call(ExecutionContext executionContext, Token token, Map<String, List<String>> queryProperties, Map<String, String> pathParameters, ComplexContent body, String language, List<Header> responseHeaders) throws ServiceException, IOException {
+	
+	private Map<String, TypeOperation> analyzedOperations = new HashMap<String, TypeOperation>();
+	protected TypeOperation getOperation(String query) throws ParseException {
+		if (!analyzedOperations.containsKey(query)) {
+			synchronized(analyzedOperations) {
+				if (!analyzedOperations.containsKey(query))
+					analyzedOperations.put(query, (TypeOperation) new PathAnalyzer<ComplexContent>(new TypesOperationProvider()).analyze(QueryParser.getInstance().parse(query)));
+			}
+		}
+		return analyzedOperations.get(query);
+	}
+	protected Object getVariable(ComplexContent pipeline, String query) throws ServiceException {
+		VariableOperation.registerRoot();
+		try {
+			return getOperation(query).evaluate(pipeline);
+		}
+		catch (EvaluationException e) {
+			throw new ServiceException(e);
+		}
+		catch (ParseException e) {
+			throw new ServiceException(e);
+		}
+		finally {
+			VariableOperation.unregisterRoot();
+		}
+	}
+	
+	private ComplexContent call(HTTPRequest request, ExecutionContext executionContext, Token token, Map<String, List<String>> queryProperties, Map<String, String> pathParameters, ComplexContent body, String language, List<Header> responseHeaders) throws ServiceException, IOException {
 		ComplexContent input = service.getServiceInterface().getInputDefinition().newInstance();
 		
 		// the problem is the context: the id might not be a node, the parent might not be a node, we might not be using nodes, we might not be using cms at all
@@ -352,6 +417,8 @@ public class CRUDListener implements EventHandler<HTTPRequest, HTTPResponse> {
 			}
 		}
 		
+		String serviceContext = WebApplicationUtils.getServiceContext(token, application, request);
+		
 		if (permissionHandler != null) {
 			switch(service.getType()) {
 				case CREATE:
@@ -376,10 +443,17 @@ public class CRUDListener implements EventHandler<HTTPRequest, HTTPResponse> {
 				break;
 			}
 			
+			if (context == null && artifact.getConfig().isUseServiceContextAsPermissionContext()) {
+				context = "context:" + serviceContext;
+			}
+			else if (context == null && artifact.getConfig().isUseWebApplicationAsPermissionContext()) {
+				context = "context:" + application.getId();
+			}
+			
 			if (action != null && !permissionHandler.hasPermission(token, context, action)) {
 				boolean allowed = false;
 				// if you specifically did not select a security field, we can check the potential permissions as well
-				if (artifact.getConfig().getSecurityContextField() == null) {
+				if (artifact.getConfig().getSecurityContextField() == null && !artifact.getConfig().isUseServiceContextAsPermissionContext()) {
 					PotentialPermissionHandler potentialPermissionHandler = application.getPotentialPermissionHandler();
 					if (potentialPermissionHandler != null) {
 						allowed = potentialPermissionHandler.hasPotentialPermission(token, action);
@@ -469,7 +543,10 @@ public class CRUDListener implements EventHandler<HTTPRequest, HTTPResponse> {
 		
 		ServiceRuntime runtime = new ServiceRuntime(service, executionContext);
 		// we set the service context to the web application, rest services can be mounted in multiple applications
-		ServiceUtils.setServiceContext(runtime, application.getId());
+//		ServiceUtils.setServiceContext(runtime, application.getId());
+		// get the smarter service context
+		ServiceUtils.setServiceContext(runtime, serviceContext);
+		
 		runtime.getContext().put("webApplicationId", application.getId());
 		ComplexContent output = runtime.run(input);
 		
