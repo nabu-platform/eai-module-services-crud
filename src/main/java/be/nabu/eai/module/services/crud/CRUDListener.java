@@ -163,14 +163,16 @@ public class CRUDListener implements EventHandler<HTTPRequest, HTTPResponse> {
 					String downloadCorrelationId = correlationIdList == null || correlationIdList.isEmpty() ? null : correlationIdList.get(0);
 					String downloadSecret = secretList == null || secretList.isEmpty() ? null : secretList.get(0);
 					String downloadAuthenticationId = authenticationIdList == null || authenticationIdList.isEmpty() ? null : authenticationIdList.get(0);
-					// check for specific
-					Token temporaryToken = temporaryAuthenticator.authenticate(application.getRealm(), new TemporaryAuthenticationImpl(downloadAuthenticationId, downloadSecret), device, TemporaryAuthenticator.EXECUTION + ":" + service.getId(), downloadCorrelationId);
-					// check for generic
-					if (temporaryToken == null) {
-						temporaryToken = temporaryAuthenticator.authenticate(application.getRealm(), new TemporaryAuthenticationImpl(downloadAuthenticationId, downloadSecret), device, TemporaryAuthenticator.EXECUTION, downloadCorrelationId);
-					}
-					if (temporaryToken != null) {
-						token = temporaryToken;
+					if (downloadSecret != null && downloadAuthenticationId != null) {
+						// check for specific
+						Token temporaryToken = temporaryAuthenticator.authenticate(application.getRealm(), new TemporaryAuthenticationImpl(downloadAuthenticationId, downloadSecret), device, TemporaryAuthenticator.EXECUTION + ":" + service.getId(), downloadCorrelationId);
+						// check for generic
+						if (temporaryToken == null) {
+							temporaryToken = temporaryAuthenticator.authenticate(application.getRealm(), new TemporaryAuthenticationImpl(downloadAuthenticationId, downloadSecret), device, TemporaryAuthenticator.EXECUTION, downloadCorrelationId);
+						}
+						if (temporaryToken != null) {
+							token = temporaryToken;
+						}
 					}
 				}
 			}
