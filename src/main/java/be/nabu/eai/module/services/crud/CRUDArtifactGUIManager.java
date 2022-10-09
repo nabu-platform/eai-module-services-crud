@@ -12,6 +12,8 @@ import java.util.Map;
 import java.util.concurrent.Future;
 
 import be.nabu.eai.api.NamingConvention;
+import be.nabu.eai.developer.ComplexContentEditor;
+import be.nabu.eai.developer.ComplexContentEditor.ValueWrapper;
 import be.nabu.eai.developer.MainController;
 import be.nabu.eai.developer.impl.CustomTooltip;
 import be.nabu.eai.developer.managers.base.BaseArtifactGUIInstance;
@@ -29,6 +31,7 @@ import be.nabu.eai.repository.api.Entry;
 import be.nabu.eai.repository.api.Repository;
 import be.nabu.eai.repository.resources.RepositoryEntry;
 import be.nabu.eai.repository.util.SystemPrincipal;
+import be.nabu.jfx.control.tree.Tree;
 import be.nabu.libs.artifacts.api.Artifact;
 import be.nabu.libs.property.api.Property;
 import be.nabu.libs.property.api.Value;
@@ -202,6 +205,21 @@ public class CRUDArtifactGUIManager extends BaseJAXBGUIManager<CRUDConfiguration
 		TitledPane update = new TitledPane("Update", updatePane);
 		accordion.getPanes().add(update);
 		
+		// if we have a configuration type, add a pane for that
+		if (instance.getConfig().getProvider() != null && instance.getConfig().getProvider().getConfig().getConfigurationType() != null) {
+			AnchorPane configurationPane = new AnchorPane();
+			Tree<ValueWrapper> tree = new ComplexContentEditor(instance.getProviderConfiguration(), true, instance.getRepository()).getTree();
+			AnchorPane.setBottomAnchor(tree, 0d);
+			AnchorPane.setLeftAnchor(tree, 0d);
+			AnchorPane.setRightAnchor(tree, 0d);
+			AnchorPane.setTopAnchor(tree, 0d);
+			configurationPane.getChildren().add(tree);
+			listPane.getStyleClass().add("configuration-pane");
+			listPane.getStyleClass().add("configuration-pane-basic");
+			TitledPane configurationTitledPane = new TitledPane("Configuration", configurationPane);
+			accordion.getPanes().add(configurationTitledPane);
+		}
+		
 		accordion.getPanes().add(general);
 		
 		accordion.setExpandedPane(list);
@@ -372,7 +390,10 @@ public class CRUDArtifactGUIManager extends BaseJAXBGUIManager<CRUDConfiguration
 		VBox.setMargin(label, new Insets(10, 0, 10, 0));
 		List<String> ignore = new ArrayList<String>();
 		for (Element<?> element : TypeUtils.getAllChildren((ComplexType) instance.getConfig().getCoreType())) {
-			if (!Date.class.isAssignableFrom(((SimpleType<?>) element.getType()).getInstanceClass())) {
+			if (!(element.getType() instanceof SimpleType)) {
+				continue;
+			}
+			else if (!Date.class.isAssignableFrom(((SimpleType<?>) element.getType()).getInstanceClass())) {
 				ignore.add(element.getName());
 			}
 			else {

@@ -1,7 +1,11 @@
 package be.nabu.eai.module.services.crud;
 
+import java.io.IOException;
+import java.nio.charset.Charset;
 import java.util.ArrayList;
 import java.util.List;
+
+import javax.xml.bind.JAXBException;
 
 import be.nabu.eai.module.services.crud.CRUDConfiguration.ForeignNameField;
 import be.nabu.eai.module.services.crud.api.CRUDListAction;
@@ -10,7 +14,13 @@ import be.nabu.eai.module.web.application.WebFragment;
 import be.nabu.eai.repository.api.Repository;
 import be.nabu.eai.repository.artifacts.jaxb.JAXBArtifact;
 import be.nabu.libs.artifacts.api.Artifact;
+import be.nabu.libs.resources.ResourceReadableContainer;
+import be.nabu.libs.resources.ResourceWritableContainer;
+import be.nabu.libs.resources.api.ManageableContainer;
+import be.nabu.libs.resources.api.ReadableResource;
+import be.nabu.libs.resources.api.Resource;
 import be.nabu.libs.resources.api.ResourceContainer;
+import be.nabu.libs.resources.api.WritableResource;
 import be.nabu.libs.services.ServiceRuntime;
 import be.nabu.libs.services.api.DefinedService;
 import be.nabu.libs.services.api.ExecutionContext;
@@ -20,6 +30,11 @@ import be.nabu.libs.types.api.ComplexContent;
 import be.nabu.libs.types.api.ComplexType;
 import be.nabu.libs.types.api.DefinedType;
 import be.nabu.libs.types.api.Element;
+import be.nabu.libs.types.binding.api.Window;
+import be.nabu.libs.types.binding.xml.XMLBinding;
+import be.nabu.utils.io.IOUtils;
+import be.nabu.utils.io.api.ByteBuffer;
+import be.nabu.utils.io.api.ReadableContainer;
 
 public class CRUDArtifact extends JAXBArtifact<CRUDConfiguration> implements MountableWebFragmentProvider {
 
@@ -41,6 +56,59 @@ public class CRUDArtifact extends JAXBArtifact<CRUDConfiguration> implements Mou
 	@Override
 	public String getRelativePath() {
 		return "/";
+	}
+	
+	private ComplexContent providerConfiguration;
+	private boolean providerConfigurationResolved;
+	
+	@Override
+	public void save(ResourceContainer<?> directory) throws IOException {
+		// save standard stuff
+		super.save(directory);
+		// save the provider configuration if we have any
+		ComplexContent providerConfiguration = getProviderConfiguration();
+		if (providerConfiguration != null) {
+			Resource target = getDirectory().getChild("provider-configuration.xml");
+			if (target == null) {
+				target = ((ManageableContainer<?>) getDirectory()).create("provider-configuration.xml", "application/xml");
+			}
+			try (ResourceWritableContainer writable = new ResourceWritableContainer((WritableResource) target)) {
+				XMLBinding binding = new XMLBinding(providerConfiguration.getType(), Charset.forName("UTF-8"));
+				binding.marshal(IOUtils.toOutputStream(writable), providerConfiguration);
+			}
+		}
+	}
+
+	public ComplexContent getProviderConfiguration() {
+		if (!providerConfigurationResolved) {
+			synchronized(this) {
+				if (!providerConfigurationResolved) {
+					if (getConfig().getProvider() != null && getConfig().getProvider().getConfig().getConfigurationType() != null) {
+						Resource target = getDirectory().getChild("provider-configuration.xml");
+						if (target == null) {
+							providerConfiguration = ((ComplexType) getConfig().getProvider().getConfig().getConfigurationType()).newInstance();
+						}
+						else {
+							try {
+								ReadableContainer<ByteBuffer> readable = new ResourceReadableContainer((ReadableResource) target);
+								try {
+									XMLBinding binding = new XMLBinding((ComplexType) getConfig().getProvider().getConfig().getConfigurationType(), Charset.forName("UTF-8"));
+									providerConfiguration = binding.unmarshal(IOUtils.toInputStream(readable), new Window[0]);
+								}
+								finally {
+									readable.close();
+								}
+							}
+							catch (Exception e) {
+								throw new RuntimeException(e);
+							}
+						}
+					}
+					providerConfigurationResolved = true;
+				}
+			}
+		}
+		return providerConfiguration;
 	}
 
 	public CRUDListAction asListAction() {

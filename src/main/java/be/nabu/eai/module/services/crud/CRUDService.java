@@ -21,7 +21,6 @@ import be.nabu.eai.module.web.application.api.PermissionWithRole;
 import be.nabu.eai.module.web.application.api.RESTFragment;
 import be.nabu.eai.repository.EAIRepositoryUtils;
 import be.nabu.eai.repository.util.Filter;
-import be.nabu.libs.artifacts.api.Artifact;
 import be.nabu.libs.artifacts.api.ArtifactWithExceptions;
 import be.nabu.libs.artifacts.api.ExceptionDescription;
 import be.nabu.libs.authentication.api.Permission;
@@ -224,6 +223,7 @@ public class CRUDService implements DefinedService, WebFragment, RESTFragment, A
 						serviceInput.set("transactionId", transactionId);
 						serviceInput.set("language", language);
 						serviceInput.set("typeId", artifact.getConfig().getCoreType().getId());
+						serviceInput.set("coreTypeId", artifact.getConfig().getCoreType().getId());
 						serviceInput.set("changeTracker", artifact.getConfig().getChangeTracker() == null ? null : artifact.getConfig().getChangeTracker().getId());
 						
 						// note that currently this does _not_ work with generated primary keys because we don't feed them back into the end result yet
@@ -266,6 +266,7 @@ public class CRUDService implements DefinedService, WebFragment, RESTFragment, A
 						serviceInput.set("connectionId", connectionId);
 						serviceInput.set("transactionId", transactionId);
 						serviceInput.set("typeId", artifact.getConfig().getCoreType().getId());
+						serviceInput.set("coreTypeId", artifact.getConfig().getCoreType().getId());
 						if (artifact.getConfig().isUseLanguage()) {
 							serviceInput.set("language", language);
 						}
@@ -283,6 +284,7 @@ public class CRUDService implements DefinedService, WebFragment, RESTFragment, A
 						}
 						serviceInput.set("id", deleteId);
 						serviceInput.set("typeId", artifact.getConfig().getCoreType().getId());
+						serviceInput.set("coreTypeId", artifact.getConfig().getCoreType().getId());
 						serviceInput.set("connectionId", connectionId);
 						serviceInput.set("transactionId", transactionId);
 //						serviceInput.set("language", language);
@@ -295,6 +297,7 @@ public class CRUDService implements DefinedService, WebFragment, RESTFragment, A
 						}
 						serviceInput = artifact.getConfig().getProvider().getConfig().getListService().getServiceInterface().getInputDefinition().newInstance();
 						serviceInput.set("typeId", singleOutput.getId());
+						serviceInput.set("coreTypeId", artifact.getConfig().getCoreType().getId());
 						serviceInput.set("connectionId", connectionId);
 						serviceInput.set("transactionId", transactionId);
 						// don't count when we are getting!
@@ -320,6 +323,7 @@ public class CRUDService implements DefinedService, WebFragment, RESTFragment, A
 //						serviceInput.set("typeId", artifact.getConfig().getCoreType().getId());
 						// we want to use the extended output (with necessary restrictions but also foreign key extensions) to be used as basis for the select
 						serviceInput.set("typeId", singleOutput.getId());
+						serviceInput.set("coreTypeId", artifact.getConfig().getCoreType().getId());
 						serviceInput.set("connectionId", connectionId);
 						serviceInput.set("transactionId", transactionId);
 						if (artifact.getConfig().isUseLanguage()) {
@@ -348,6 +352,11 @@ public class CRUDService implements DefinedService, WebFragment, RESTFragment, A
 				
 				serviceInput.set("meta", getMeta());
 				
+				ComplexContent providerConfiguration = artifact.getProviderConfiguration();
+				if (providerConfiguration != null) {
+					serviceInput.set("configuration", providerConfiguration);
+				}
+				
 				Object providerInput = input.get("provider");
 				// if we have provider input, we must pass it along
 				if (providerInput != null) {
@@ -364,7 +373,7 @@ public class CRUDService implements DefinedService, WebFragment, RESTFragment, A
 				
 				switch(type) {
 					case LIST: 
-						if (serviceOutput.get("results") != null) {
+						if (serviceOutput != null && serviceOutput.get("results") != null) {
 							ListResult result = TypeUtils.getAsBean((ComplexContent) serviceOutput.get("results"), ListResult.class);
 							if (result.getResults() != null && !result.getResults().isEmpty()) {
 								output.set("results", result.getResults());
@@ -387,7 +396,7 @@ public class CRUDService implements DefinedService, WebFragment, RESTFragment, A
 						}
 					break;
 					case GET:
-						if (serviceOutput.get("results") != null) {
+						if (serviceOutput != null && serviceOutput.get("results") != null) {
 							ListResult result = TypeUtils.getAsBean((ComplexContent) serviceOutput.get("results"), ListResult.class);
 							if (result.getResults() != null && !result.getResults().isEmpty()) {
 								output.set("result", result.getResults().get(0));

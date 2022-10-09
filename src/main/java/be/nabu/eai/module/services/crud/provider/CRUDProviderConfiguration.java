@@ -15,7 +15,7 @@ public class CRUDProviderConfiguration {
 	private DefinedService listService, createService, updateService, deleteService, createBatchService, updateBatchService, deleteBatchService;
 
 	// a base type, it is currently not enforced but it allows you to indicate which base type you expect to be present through extension
-	private DefinedType baseType;
+	private DefinedType baseType, configurationType;
 	
 	// you can blacklist fields at the provider level, this is mostly useful when you are working with a base type that has some fields that you want to automanage in the provider
 	private List<String> blacklistedFields;
@@ -96,6 +96,14 @@ public class CRUDProviderConfiguration {
 	}
 	public void setBaseType(DefinedType baseType) {
 		this.baseType = baseType;
+	}
+	
+	@XmlJavaTypeAdapter(value = ArtifactXMLAdapter.class)
+	public DefinedType getConfigurationType() {
+		return configurationType;
+	}
+	public void setConfigurationType(DefinedType configurationType) {
+		this.configurationType = configurationType;
 	}
 	
 	public Boolean getPrimaryKeySecurityContext() {
