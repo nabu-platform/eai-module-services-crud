@@ -162,13 +162,20 @@ public class CRUDArtifactManager extends JAXBArtifactManager<CRUDConfiguration, 
 			// note that we can only add update services & list services if we have a primary key
 			ModifiableEntry services = EAIRepositoryUtils.getParent(parent, "services", true);
 			ModifiableEntry batchServices = EAIRepositoryUtils.getParent(parent, "batch", true);
+			ModifiableEntry hooks = artifact.getConfig().isHooks() ? EAIRepositoryUtils.getParent(parent, "hooks", true) : null;
 			if (artifact.getConfig().getProvider() != null && artifact.getConfig().getProvider().getConfig().getCreateService() != null) {
 				addChild(artifact, entries, services, "create", new CRUDService(artifact, services.getId() + ".create", CRUDType.CREATE, createInput, updateInput, outputList, updateIntermediaryInput, output, createOutput, updateOutput, null), "Create");
+				if (hooks != null) {
+					addChild(artifact, entries, hooks, "create", new CRUDHook(hooks.getId() + ".create", createOutput), "Create");	
+				}
 			}
 			if (!primary.isEmpty() && artifact.getConfig().getProvider() != null && artifact.getConfig().getProvider().getConfig().getUpdateService() != null) {
 				addChild(artifact, entries, services, "update", new CRUDService(artifact, services.getId() + ".update", CRUDType.UPDATE, createInput, updateInput, outputList, updateIntermediaryInput, output, createOutput, updateOutput, null), "Update");
 				// add the batch update service
 				addChild(artifact, entries, batchServices, "updateAll", new CRUDBatchService(artifact, batchServices.getId() + ".updateAll", CRUDType.UPDATE, updateFullInput, updateIntermediaryInput, updateOutput), "Update All");
+				if (hooks != null) {
+					addChild(artifact, entries, hooks, "update", new CRUDHook(hooks.getId() + ".update", updateOutput), "Update");	
+				}
 			}
 			if (artifact.getConfig().getProvider() != null && artifact.getConfig().getProvider().getConfig().getListService() != null) {
 				addChild(artifact, entries, services, "list", new CRUDService(artifact, services.getId() + ".list", CRUDType.LIST, createInput, updateInput, outputList, updateIntermediaryInput, output, createOutput, updateOutput, artifact.asListAction()), "List");
@@ -338,7 +345,7 @@ public class CRUDArtifactManager extends JAXBArtifactManager<CRUDConfiguration, 
 		return generated;
 	}
 	
-	private void addChild(CRUDArtifact artifact, List<Entry> entries, ModifiableEntry services, String name, DefinedService service, String prettyName) {
+	private void addChild(CRUDArtifact artifact, List<Entry> entries, ModifiableEntry services, String name, Artifact service, String prettyName) {
 		EAINode node = new EAINode();
 		node.setArtifactClass(service.getClass());
 		node.setArtifact(service);

@@ -11,6 +11,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 
+import be.nabu.eai.api.NamingConvention;
 import be.nabu.eai.module.services.crud.api.CRUDListAction;
 import be.nabu.eai.module.services.crud.api.CRUDProvider;
 import be.nabu.eai.module.services.crud.provider.CRUDMeta;
@@ -64,13 +65,17 @@ import be.nabu.libs.types.structure.Structure;
 //		-> maybe include an extension requirement in this? basically we say you have to extend a certain document, we list fields from there
 // -> we want additional configuration (perhaps a configuration document that is configured in the provider?)
 // -> for example for CMS nodes you can configure the groups/roles etc
-
+// TODO: add support for optional security contexts. some people might have the role globally (e.g. all masterdata) or only in a particular context (only with an ownerid)
 // TODO: provider parameters: allow to fix fill in for a CRUD artifact
 // TODO: provider parameters: allow to fill in via query params? or choose to expose or not
 public class CRUDService implements DefinedService, WebFragment, RESTFragment, ArtifactWithExceptions, DownloadableFragment {
 
-	public static List<String> inputOperators = Arrays.asList("=", "<>", ">", "<", ">=", "<=", "like", "ilike");
-	public static List<String> operators = Arrays.asList("=", "<>", ">", "<", ">=", "<=", "is null", "is not null", "like", "ilike");
+	public static List<String> inputOperators = Arrays.asList("=", "<>", ">", "<", ">=", "<=", "like", "ilike", "=~", "!=~");
+	// we needed operators to indicate case insensitive equals (and not equals)
+	// the azure kusto query language was one of the few that I found with a dedicated operator for this, although they use !~ for the not equals
+	// i want to reserve ~ and !~ for the meaning they have in nabu (regex), so there is a slight deviation at that point
+	// for a very short time the operator was i= to be in sync with the ilike. !i= is harder to read though
+	public static List<String> operators = Arrays.asList("=", "<>", ">", "<", ">=", "<=", "is null", "is not null", "like", "ilike", "=~", "!=~");
 	
 	public enum TotalCount {
 		EXACT,
@@ -336,6 +341,9 @@ public class CRUDService implements DefinedService, WebFragment, RESTFragment, A
 							limit = limit == null ? listAction.getMaxLimit() : Math.min(limit, listAction.getMaxLimit());
 						}
 						TotalCount totalCount = input == null ? null : (TotalCount) input.get("totalCount");
+						if (totalCount == null) {
+							totalCount = artifact.getConfig().getDefaultTotalCount();
+						}
 						serviceInput.set("limit", limit);
 						serviceInput.set("offset", input == null ? null : input.get("offset"));
 						serviceInput.set("totalCount", totalCount == null ? TotalCount.EXACT : totalCount);
@@ -405,6 +413,7 @@ public class CRUDService implements DefinedService, WebFragment, RESTFragment, A
 					break;
 					case UPDATE:
 					case CREATE:
+						artifact.checkHooks(executionContext, connectionId, transactionId, (ComplexContent) (type == CRUDType.UPDATE ? output.get("updated") : output.get("created")), type == CRUDType.UPDATE, true);
 						artifact.checkBroadcast(executionContext, connectionId, transactionId, (ComplexContent) serviceInput.get("instance"), type == CRUDType.UPDATE, true);
 					break;
 				}
@@ -476,8 +485,22 @@ public class CRUDService implements DefinedService, WebFragment, RESTFragment, A
 			CRUDFilter newFilter = new CRUDFilter();
 			newFilter.setVary(filter.isVary());
 			newFilter.setKey(filter.getKey());
-			newFilter.setOperator("ilike".equals(filter.getOperator()) ? "like" : filter.getOperator());
-			newFilter.setCaseInsensitive(filter.isCaseInsensitive() || "ilike".equals(filter.getOperator()));
+			if ("ilike".equals(filter.getOperator())) {
+				newFilter.setOperator("like");
+				newFilter.setCaseInsensitive(true);
+			}
+			else if ("=~".equals(filter.getOperator())) {
+				newFilter.setOperator("=");
+				newFilter.setCaseInsensitive(true);
+			}
+			else if ("!=~".equals(filter.getOperator())) {
+				newFilter.setOperator("!=");
+				newFilter.setCaseInsensitive(true);
+			}
+			else {
+				newFilter.setOperator(filter.getOperator());
+				newFilter.setCaseInsensitive(filter.isCaseInsensitive());
+			}
 			// if we removed the previous filter and it was an "and", we can't make this an or, cause the end result would not match
 			// if the previous one was also an or (removed or not), it doesn't matter
 			newFilter.setOr(filter.isOr() && (removed == null || removed.isOr()));
@@ -793,15 +816,15 @@ public class CRUDService implements DefinedService, WebFragment, RESTFragment, A
 		String name = getName();
 		switch (type) {
 			case CREATE:
-				return name + ".create";
+				return artifact.getConfig().getCreatePermission() == null ? name + ".create" : artifact.getConfig().getCreatePermission();
 			case DELETE: 
-				return name + ".delete";
+				return artifact.getConfig().getDeletePermission() == null ? name + ".delete" : artifact.getConfig().getDeletePermission();
 			case LIST:
-				return name + ".list" + (listAction.getName() == null ? "" : CRUDArtifactManager.getViewName(listAction.getName()));
+				return artifact.getConfig().getListPermission() == null ? (name + ".list" + (listAction.getName() == null ? "" : CRUDArtifactManager.getViewName(listAction.getName()))) : artifact.getConfig().getListPermission();
 			case UPDATE:
-				return name + ".update";
+				return artifact.getConfig().getUpdatePermission() == null ? name + ".update" : artifact.getConfig().getUpdatePermission();
 			case GET:
-				return name + ".get" + (listAction.getName() == null ? "" : CRUDArtifactManager.getViewName(listAction.getName()));
+				return artifact.getConfig().getGetPermission() == null ? (name + ".get" + (listAction.getName() == null ? "" : CRUDArtifactManager.getViewName(listAction.getName()))) : artifact.getConfig().getGetPermission();
 		}
 		return null;
 	}
@@ -880,6 +903,7 @@ public class CRUDService implements DefinedService, WebFragment, RESTFragment, A
 		String name = artifact.getConfig().getName();
 		if (name == null || name.trim().isEmpty()) {
 			name = artifact.getConfig().getCoreType().getName();
+			name = NamingConvention.LOWER_CAMEL_CASE.apply(name, NamingConvention.UPPER_CAMEL_CASE);
 		}
 		return name;
 	}
@@ -899,7 +923,7 @@ public class CRUDService implements DefinedService, WebFragment, RESTFragment, A
 			case UPDATE:
 			case DELETE:
 				// if we have a security context and the id is not a valid one, add it
-				return path + (getSecurityContext() != null && !artifact.getConfig().getProvider().isPrimaryKeySecurityContext() ? "{contextId}/" : "") + getName() + suffix + "/{id}";
+				return path + (getSecurityContext() != null && !artifact.isPrimaryKeySecurityContext() ? "{contextId}/" : "") + getName() + suffix + "/{id}";
 			case CREATE:
 				if (getSecurityContext() != null) {
 					path += "{contextId}/";
@@ -1046,7 +1070,7 @@ public class CRUDService implements DefinedService, WebFragment, RESTFragment, A
 			case DELETE: 
 			case UPDATE: 
 				parameters.add(new SimpleElementImpl("id", (SimpleType) primary.getType(), input)); 
-				if (securityContext != null && !artifact.getConfig().getProvider().isPrimaryKeySecurityContext()) {
+				if (securityContext != null && !artifact.isPrimaryKeySecurityContext()) {
 					parameters.add(new SimpleElementImpl("contextId", (SimpleType) securityContext.getType(), input));
 				}
 			break;
@@ -1112,4 +1136,19 @@ public class CRUDService implements DefinedService, WebFragment, RESTFragment, A
 		return null;
 	}
 	
+	@Override
+	public String getDescription() {
+		return null;
+	}
+
+	@Override
+	public List<String> getTags() {
+		return Arrays.asList(NamingConvention.UPPER_TEXT.apply(getName(), NamingConvention.LOWER_CAMEL_CASE));
+	}
+
+	@Override
+	public String getSummary() {
+		return NamingConvention.UPPER_TEXT.apply(type.name()) + " " + NamingConvention.UPPER_TEXT.apply(getName(), NamingConvention.LOWER_CAMEL_CASE);
+	}
+
 }

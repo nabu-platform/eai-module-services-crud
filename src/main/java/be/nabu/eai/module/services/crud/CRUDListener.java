@@ -28,6 +28,7 @@ import be.nabu.eai.module.web.application.TemporaryAuthenticationImpl;
 import be.nabu.eai.module.web.application.WebApplication;
 import be.nabu.eai.module.web.application.WebApplicationUtils;
 import be.nabu.eai.module.web.application.api.TemporaryAuthenticator;
+import be.nabu.eai.repository.EAIRepositoryUtils;
 import be.nabu.eai.repository.api.LanguageProvider;
 import be.nabu.eai.repository.util.Filter;
 import be.nabu.libs.authentication.api.Authenticator;
@@ -203,7 +204,7 @@ public class CRUDListener implements EventHandler<HTTPRequest, HTTPResponse> {
 			
 			// maybe at some point we also want to allow for specific rate limit actions/contexts here?
 			// for now we are consistent with the default in REST services with no explicit action
-			HTTPResponse checkRateLimits = WebApplicationUtils.checkRateLimits(application, token, device, service.getId(), null, request);
+			HTTPResponse checkRateLimits = WebApplicationUtils.checkRateLimits(application, token, device, artifact.getConfig().getListPermission() == null ? service.getId() : artifact.getConfig().getListPermission(), null, request);
 			if (checkRateLimits != null) {
 				return checkRateLimits;
 			}
@@ -396,7 +397,6 @@ public class CRUDListener implements EventHandler<HTTPRequest, HTTPResponse> {
 		// so how do we validate the context? for create & list, we presume the parent field is the context? for update & delete, it is likely the instance itself
 		// if there is no context, you _must_ have a global permission which is in a way stricter than a specific context permission, so we should be able to do that at least
 		// check permissions
-		PermissionHandler permissionHandler = application.getPermissionHandler();
 		String action = service.getPermissionAction();
 		String context = null;
 		String parentQueryName = null;
@@ -416,26 +416,39 @@ public class CRUDListener implements EventHandler<HTTPRequest, HTTPResponse> {
 			}
 			if (parentQueryName != null) {
 				context = pathParameters.get("contextId");
+				if (artifact.getConfig().getSecurityContextFieldPrefix() != null) {
+					context = artifact.getConfig().getSecurityContextFieldPrefix() + ":" + context;
+				}
 			}
 		}
 		
 		String serviceContext = WebApplicationUtils.getServiceContext(token, application, request);
 		
+		PermissionHandler permissionHandler = application.getPermissionHandler();
 		if (permissionHandler != null) {
 			switch(service.getType()) {
 				case CREATE:
 					if (pathParameters.get("contextId") != null) {
 						context = pathParameters.get("contextId");
+						if (artifact.getConfig().getSecurityContextFieldPrefix() != null) {
+							context = artifact.getConfig().getSecurityContextFieldPrefix() + ":" + context;
+						}
 					}
 				break;
 				case GET:
 				case UPDATE:
 				case DELETE:
-					if (artifact.getConfig().getProvider().isPrimaryKeySecurityContext()) {
+					if (artifact.isPrimaryKeySecurityContext()) {
 						context = pathParameters.get("id");
+						if (artifact.getConfig().getPrimaryKeySecurityContextPrefix() != null) {
+							context = artifact.getConfig().getPrimaryKeySecurityContextPrefix() + ":" + context;
+						}
 					}
 					else if (pathParameters.get("contextId") != null) {
 						context = pathParameters.get("contextId");
+						if (artifact.getConfig().getSecurityContextFieldPrefix() != null) {
+							context = artifact.getConfig().getSecurityContextFieldPrefix() + ":" + context;
+						}
 					}
 				break;
 				case LIST:
@@ -451,11 +464,23 @@ public class CRUDListener implements EventHandler<HTTPRequest, HTTPResponse> {
 			else if (context == null && artifact.getConfig().isUseWebApplicationAsPermissionContext()) {
 				context = "context:" + application.getId();
 			}
+			else if (context == null && artifact.getConfig().isUseProjectAsPermissionContext()) {
+				context = "context:" + EAIRepositoryUtils.getProject(artifact.getRepository().getEntry(artifact.getId())).getId();
+			}
+			else if (context == null && artifact.getConfig().getCustomSecurityContext() != null) {
+				// TODO: do we want variable execution at this point?
+				context = artifact.getConfig().getCustomSecurityContext();
+			}
+			else if (context == null && artifact.getConfig().isUseGlobalPermissionContext()) {
+				context = "context:$global";
+			}
 			
+			// permission checks are run against the actual service context
+			ServiceRuntime.getGlobalContext().put("service.context", serviceContext);
 			if (action != null && !permissionHandler.hasPermission(token, context, action)) {
 				boolean allowed = false;
 				// if you specifically did not select a security field, we can check the potential permissions as well
-				if (artifact.getConfig().getSecurityContextField() == null && !artifact.getConfig().isUseServiceContextAsPermissionContext()) {
+				if (artifact.getConfig().getSecurityContextField() == null && !artifact.getConfig().isUseServiceContextAsPermissionContext() && !artifact.getConfig().isUseWebApplicationAsPermissionContext() && !artifact.getConfig().isUseGlobalPermissionContext()) {
 					PotentialPermissionHandler potentialPermissionHandler = application.getPotentialPermissionHandler();
 					if (potentialPermissionHandler != null) {
 						allowed = potentialPermissionHandler.hasPotentialPermission(token, action);
@@ -465,6 +490,7 @@ public class CRUDListener implements EventHandler<HTTPRequest, HTTPResponse> {
 					throw new HTTPException(token == null ? 401 : 403, "User does not have permission to execute the rest service", "User '" + (token == null ? Authenticator.ANONYMOUS : token.getName()) + "' does not have permission to run the CRUD service: " + service.getId(), token);
 				}
 			}
+			ServiceRuntime.getGlobalContext().put("service.context", application.getId());
 		}
 		
 		String chosenLanguage = null;
@@ -511,7 +537,7 @@ public class CRUDListener implements EventHandler<HTTPRequest, HTTPResponse> {
 			case LIST:
 				// limit to the user if we have a permission handler
 				// if we don't have one configured, it is not enforced on the other actions either and it could backfire trying to force it here
-				input.set("limitToUser", permissionHandler != null);
+				input.set("limitToUser", permissionHandler != null && artifact.getConfig().isRestLimitToUser());
 				List<String> limit = queryProperties.get("limit");
 				if (limit != null && !limit.isEmpty()) {
 					input.set("limit", limit.get(0));
@@ -544,6 +570,8 @@ public class CRUDListener implements EventHandler<HTTPRequest, HTTPResponse> {
 		}
 		
 		ServiceRuntime runtime = new ServiceRuntime(service, executionContext);
+		runtime.setSlaProvider(application);
+		
 		// we set the service context to the web application, rest services can be mounted in multiple applications
 //		ServiceUtils.setServiceContext(runtime, application.getId());
 		// get the smarter service context

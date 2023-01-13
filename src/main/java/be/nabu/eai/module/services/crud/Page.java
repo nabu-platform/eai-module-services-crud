@@ -1,6 +1,6 @@
 package be.nabu.eai.module.services.crud;
 
-public class Page {
+public class Page implements be.nabu.eai.repository.api.Page {
 	
 	private int current, total;
 	private long totalRowCount, pageSize, rowOffset;

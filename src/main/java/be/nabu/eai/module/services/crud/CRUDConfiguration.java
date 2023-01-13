@@ -8,6 +8,7 @@ import javax.xml.bind.annotation.adapters.XmlJavaTypeAdapter;
 
 import be.nabu.eai.api.Comment;
 import be.nabu.eai.api.InterfaceFilter;
+import be.nabu.eai.module.services.crud.CRUDService.TotalCount;
 import be.nabu.eai.module.services.crud.provider.CRUDProviderArtifact;
 import be.nabu.eai.repository.jaxb.ArtifactXMLAdapter;
 import be.nabu.libs.artifacts.api.DataSourceProviderArtifact;
@@ -41,8 +42,12 @@ public class CRUDConfiguration {
 			this.foreignKey = foreignKey;
 		}
 	}
+
+	// this was always set to true when exposed as rest, but especially for management purposes this might not be useful
+	// e.g. in some management setups the users that are used in management are simply not known to the application itself
+	private boolean restLimitToUser = true;
 	
-	private boolean broadcastCreate, broadcastUpdate;
+	private boolean broadcastCreate, broadcastUpdate, hooks;
 	
 	// when you run a create or update, do you want the created result back or a full get result? depending on the blacklisting and/or importing these can be vastly different
 	private boolean useListOutputForCreate, useListOutputForUpdate;
@@ -67,10 +72,17 @@ public class CRUDConfiguration {
 	private String securityContextField;
 	
 	// you can configure the rest service to use the current service context as the permission context for security checks
-	private boolean useServiceContextAsPermissionContext, useWebApplicationAsPermissionContext;
+	private boolean useServiceContextAsPermissionContext, useWebApplicationAsPermissionContext, useProjectAsPermissionContext, useGlobalPermissionContext;
+	
+	// allow for custom security context
+	// instead of a fully custom context, you can also set a custom prefix, allowing for dynamic lookup
+	// IF you have primary key as security, you can set a security context for the id itself
+	private String customSecurityContext, securityContextFieldPrefix, primaryKeySecurityContextPrefix;
 	
 	// we can also set roles
 	private List<String> createRole, updateRole, listRole, deleteRole;
+	
+	private String createPermission, updatePermission, listPermission, getPermission, deletePermission;
 	
 	private List<CRUDFilter> filters;
 	
@@ -79,6 +91,10 @@ public class CRUDConfiguration {
 	private boolean useExplicitLanguage;
 	
 	private DataSourceProviderArtifact connection;
+	
+	private TotalCount defaultTotalCount;
+	
+	private Boolean primaryKeySecurityContext;
 	
 	// the name is necessary for some things like permissions, components...
 	// if none is set, we assume the root name of the document
@@ -124,21 +140,21 @@ public class CRUDConfiguration {
 	public void setUpdateBlacklistFields(List<String> updateFields) {
 		this.updateBlacklistFields = updateFields;
 	}
-	@Field(hide = "useServiceContextAsPermissionContext == true || useWebApplicationAsPermissionContext == true")
+	@Field(hide = "useServiceContextAsPermissionContext == true || useWebApplicationAsPermissionContext == true || useProjectAsPermissionContext == true || customSecurityContext != null || useGlobalPermissionContext == true")
 	public String getSecurityContextField() {
 		return securityContextField;
 	}
 	public void setSecurityContextField(String securityContextField) {
 		this.securityContextField = securityContextField;
 	}
-	@Field(hide = "securityContextField != null || useWebApplicationAsPermissionContext == true")
+	@Field(hide = "securityContextField != null || useWebApplicationAsPermissionContext == true || useProjectAsPermissionContext == true || customSecurityContext != null || useGlobalPermissionContext == true || primaryKeySecurityContext == true")
 	public boolean isUseServiceContextAsPermissionContext() {
 		return useServiceContextAsPermissionContext;
 	}
 	public void setUseServiceContextAsPermissionContext(boolean useServiceContextAsPermissionContext) {
 		this.useServiceContextAsPermissionContext = useServiceContextAsPermissionContext;
 	}
-	@Field(hide = "useServiceContextAsPermissionContext == true || securityContextField != null")
+	@Field(hide = "useServiceContextAsPermissionContext == true || securityContextField != null || useProjectAsPermissionContext == true || customSecurityContext != null || useGlobalPermissionContext == true || primaryKeySecurityContext == true")
 	public boolean isUseWebApplicationAsPermissionContext() {
 		return useWebApplicationAsPermissionContext;
 	}
@@ -282,5 +298,101 @@ public class CRUDConfiguration {
 	public void setUseListOutputForUpdate(boolean useListOutputForUpdate) {
 		this.useListOutputForUpdate = useListOutputForUpdate;
 	}
-
+	public String getCreatePermission() {
+		return createPermission;
+	}
+	public void setCreatePermission(String createPermission) {
+		this.createPermission = createPermission;
+	}
+	public String getUpdatePermission() {
+		return updatePermission;
+	}
+	public void setUpdatePermission(String updatePermission) {
+		this.updatePermission = updatePermission;
+	}
+	public String getListPermission() {
+		return listPermission;
+	}
+	public void setListPermission(String listPermission) {
+		this.listPermission = listPermission;
+	}
+	public String getGetPermission() {
+		return getPermission;
+	}
+	public void setGetPermission(String getPermission) {
+		this.getPermission = getPermission;
+	}
+	public String getDeletePermission() {
+		return deletePermission;
+	}
+	public void setDeletePermission(String deletePermission) {
+		this.deletePermission = deletePermission;
+	}
+	public TotalCount getDefaultTotalCount() {
+		return defaultTotalCount;
+	}
+	public void setDefaultTotalCount(TotalCount defaultTotalCount) {
+		this.defaultTotalCount = defaultTotalCount;
+	}
+	@Field(hide = "useServiceContextAsPermissionContext == true || securityContextField != null || customSecurityContext != null || useWebApplicationAsPermissionContext == true || useGlobalPermissionContext == true || primaryKeySecurityContext == true")
+	public boolean isUseProjectAsPermissionContext() {
+		return useProjectAsPermissionContext;
+	}
+	public void setUseProjectAsPermissionContext(boolean useProjectAsPermissionContext) {
+		this.useProjectAsPermissionContext = useProjectAsPermissionContext;
+	}
+	@Field(hide = "useServiceContextAsPermissionContext == true || securityContextField != null || useProjectAsPermissionContext == true || useWebApplicationAsPermissionContext == true || useGlobalPermissionContext == true || primaryKeySecurityContext == true")
+	public String getCustomSecurityContext() {
+		return customSecurityContext;
+	}
+	public void setCustomSecurityContext(String customSecurityContext) {
+		this.customSecurityContext = customSecurityContext;
+	}
+	
+	public boolean isRestLimitToUser() {
+		return restLimitToUser;
+	}
+	public void setRestLimitToUser(boolean restLimitToUser) {
+		this.restLimitToUser = restLimitToUser;
+	}
+	
+	@Field(hide = "useServiceContextAsPermissionContext == true || securityContextField != null || useProjectAsPermissionContext == true || useWebApplicationAsPermissionContext == true || customSecurityContext != null || primaryKeySecurityContext == true")
+	public boolean isUseGlobalPermissionContext() {
+		return useGlobalPermissionContext;
+	}
+	public void setUseGlobalPermissionContext(boolean useGlobalPermissionContext) {
+		this.useGlobalPermissionContext = useGlobalPermissionContext;
+	}
+	
+	@Field(show = "securityContextField != null")
+	public String getSecurityContextFieldPrefix() {
+		return securityContextFieldPrefix;
+	}
+	public void setSecurityContextFieldPrefix(String securityContextFieldPrefix) {
+		this.securityContextFieldPrefix = securityContextFieldPrefix;
+	}
+	
+	@Field(show = "primaryKeySecurityContext == true")
+	public String getPrimaryKeySecurityContextPrefix() {
+		return primaryKeySecurityContextPrefix;
+	}
+	public void setPrimaryKeySecurityContextPrefix(String primaryKeySecurityContextPrefix) {
+		this.primaryKeySecurityContextPrefix = primaryKeySecurityContextPrefix;
+	}
+	
+	@Field(hide = "useServiceContextAsPermissionContext == true || useProjectAsPermissionContext == true || useWebApplicationAsPermissionContext == true || customSecurityContext != null || useGlobalPermissionContext == true")
+	public Boolean getPrimaryKeySecurityContext() {
+		return primaryKeySecurityContext;
+	}
+	public void setPrimaryKeySecurityContext(Boolean primaryKeySecurityContext) {
+		this.primaryKeySecurityContext = primaryKeySecurityContext;
+	}
+	
+	public boolean isHooks() {
+		return hooks;
+	}
+	public void setHooks(boolean hooks) {
+		this.hooks = hooks;
+	}
+	
 }

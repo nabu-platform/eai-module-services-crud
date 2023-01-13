@@ -5,8 +5,6 @@ import java.nio.charset.Charset;
 import java.util.ArrayList;
 import java.util.List;
 
-import javax.xml.bind.JAXBException;
-
 import be.nabu.eai.module.services.crud.CRUDConfiguration.ForeignNameField;
 import be.nabu.eai.module.services.crud.api.CRUDListAction;
 import be.nabu.eai.module.web.application.MountableWebFragmentProvider;
@@ -94,6 +92,10 @@ public class CRUDArtifact extends JAXBArtifact<CRUDConfiguration> implements Mou
 								try {
 									XMLBinding binding = new XMLBinding((ComplexType) getConfig().getProvider().getConfig().getConfigurationType(), Charset.forName("UTF-8"));
 									providerConfiguration = binding.unmarshal(IOUtils.toInputStream(readable), new Window[0]);
+									// it can still be null, even if it exists! (xsi:nil in the root)
+									if (providerConfiguration == null) {
+										providerConfiguration = ((ComplexType) getConfig().getProvider().getConfig().getConfigurationType()).newInstance();
+									}
 								}
 								finally {
 									readable.close();
@@ -166,6 +168,17 @@ public class CRUDArtifact extends JAXBArtifact<CRUDConfiguration> implements Mou
 				return getConfig().getMaxLimit();
 			}
 		};
+	}
+	
+	public void checkHooks(ExecutionContext executionContext, String connectionId, String transactionId, ComplexContent content, boolean update, boolean propagate) throws ServiceException {
+		if (getConfig().isHooks()) {
+			CRUDHook hook = (CRUDHook) getRepository().resolve(getId() + ".hooks." + (update ? "update" : "create"));
+			if (hook != null) {
+				ComplexContent input = hook.getInputDefinition().newInstance();
+				input.set("data",  content);
+				hook.fire(executionContext, input);
+			}
+		}
 	}
 	
 	public void checkBroadcast(ExecutionContext executionContext, String connectionId, String transactionId, ComplexContent content, boolean update, boolean propagate) throws ServiceException {
@@ -264,5 +277,10 @@ public class CRUDArtifact extends JAXBArtifact<CRUDConfiguration> implements Mou
 				}
 			}
 		}
+	}
+	
+	public boolean isPrimaryKeySecurityContext() {
+		return (getConfig().getPrimaryKeySecurityContext() != null && getConfig().getPrimaryKeySecurityContext())
+			|| (getConfig().getProvider().getConfig().getPrimaryKeySecurityContext() != null && getConfig().getProvider().getConfig().getPrimaryKeySecurityContext());
 	}
 }

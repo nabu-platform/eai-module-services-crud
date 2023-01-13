@@ -208,6 +208,7 @@ public class CRUDArtifactGUIManager extends BaseJAXBGUIManager<CRUDConfiguration
 		// if we have a configuration type, add a pane for that
 		if (instance.getConfig().getProvider() != null && instance.getConfig().getProvider().getConfig().getConfigurationType() != null) {
 			AnchorPane configurationPane = new AnchorPane();
+			System.out.println("trying to get configuration for " + instance.getConfig().getProvider().getConfig().getConfigurationType()  + " = > " + instance.getProviderConfiguration() + " id " + instance.getId());
 			Tree<ValueWrapper> tree = new ComplexContentEditor(instance.getProviderConfiguration(), true, instance.getRepository()).getTree();
 			AnchorPane.setBottomAnchor(tree, 0d);
 			AnchorPane.setLeftAnchor(tree, 0d);
@@ -733,7 +734,8 @@ public class CRUDArtifactGUIManager extends BaseJAXBGUIManager<CRUDConfiguration
 			HBox.setMargin(input, new Insets(10, 0, 10, 10));
 			HBox.setMargin(vary, new Insets(10, 0, 10, 10));
 			HBox.setMargin(buttons, new Insets(10, 0, 10, 10));
-			filterBox.getChildren().addAll(mainOperator, alias, field, operator, buttons, input, vary);
+//			filterBox.getChildren().addAll(mainOperator, alias, field, operator, buttons, input, vary);
+			filterBox.getChildren().addAll(mainOperator, field, operator, alias, buttons, input, vary);
 			filters.getChildren().addAll(filterBox);
 		}
 		
