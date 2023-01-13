@@ -819,12 +819,17 @@ public class CRUDService implements DefinedService, WebFragment, RESTFragment, A
 				return artifact.getConfig().getCreatePermission() == null ? name + ".create" : artifact.getConfig().getCreatePermission();
 			case DELETE: 
 				return artifact.getConfig().getDeletePermission() == null ? name + ".delete" : artifact.getConfig().getDeletePermission();
-			case LIST:
-				return artifact.getConfig().getListPermission() == null ? (name + ".list" + (listAction.getName() == null ? "" : CRUDArtifactManager.getViewName(listAction.getName()))) : artifact.getConfig().getListPermission();
 			case UPDATE:
 				return artifact.getConfig().getUpdatePermission() == null ? name + ".update" : artifact.getConfig().getUpdatePermission();
+			// for the crud, get and list have the same output so one permission should be enough
+			// going back in time the "get" should have been the default but...for some reason list was embedded at very level as a read check
 			case GET:
-				return artifact.getConfig().getGetPermission() == null ? (name + ".get" + (listAction.getName() == null ? "" : CRUDArtifactManager.getViewName(listAction.getName()))) : artifact.getConfig().getGetPermission();
+				if (artifact.getConfig().getGetPermission() != null) {
+					return artifact.getConfig().getGetPermission();
+				}
+//				return artifact.getConfig().getGetPermission() == null ? (name + ".get" + (listAction.getName() == null ? "" : CRUDArtifactManager.getViewName(listAction.getName()))) : artifact.getConfig().getGetPermission();
+			case LIST:
+				return artifact.getConfig().getListPermission() == null ? (name + ".list" + (listAction.getName() == null ? "" : CRUDArtifactManager.getViewName(listAction.getName()))) : artifact.getConfig().getListPermission();
 		}
 		return null;
 	}
