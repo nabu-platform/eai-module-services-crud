@@ -271,7 +271,8 @@ public class CRUDArtifact extends JAXBArtifact<CRUDConfiguration> implements Mou
 					if (getId().equals(artifact.getId())) {
 						continue;
 					}
-					if (getConfig().getCoreType().getId().equals(artifact.getConfig().getCoreType().getId())) {
+					// corrupt cruds might not have a core type!
+					if (artifact.getConfig().getCoreType() != null && getConfig().getCoreType().getId().equals(artifact.getConfig().getCoreType().getId())) {
 						artifact.checkBroadcast(executionContext, connectionId, transactionId, content, update, false);
 					}
 				}
