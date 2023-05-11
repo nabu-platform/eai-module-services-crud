@@ -59,9 +59,8 @@ public class CRUDBatchService implements DefinedService {
 					input.add(new SimpleElementImpl<String>("transactionId", SimpleTypeWrapperFactory.getInstance().getWrapper().wrap(String.class), input, new ValueImpl<Integer>(MinOccursProperty.getInstance(), 0)));
 					switch(type) {
 						case UPDATE:
-							if (artifact.getConfig().isUseLanguage()) {
-								input.add(new SimpleElementImpl<String>("language", SimpleTypeWrapperFactory.getInstance().getWrapper().wrap(String.class), input, new ValueImpl<Integer>(MinOccursProperty.getInstance(), 0)));
-							}
+							// we always expose language at this level (?)
+							input.add(new SimpleElementImpl<String>("language", SimpleTypeWrapperFactory.getInstance().getWrapper().wrap(String.class), input, new ValueImpl<Integer>(MinOccursProperty.getInstance(), 0)));
 							input.add(new ComplexElementImpl("instance", updateInput, input, 
 								new ValueImpl<Integer>(MinOccursProperty.getInstance(), 0),
 								new ValueImpl<Integer>(MaxOccursProperty.getInstance(), 0)));
@@ -184,9 +183,7 @@ public class CRUDBatchService implements DefinedService {
 									serviceInput.set("connectionId", connectionId);
 									serviceInput.set("transactionId", transactionId);
 									serviceInput.set("typeId", artifact.getConfig().getCoreType().getId());
-									if (artifact.getConfig().isUseLanguage()) {
-										serviceInput.set("language", language);
-									}
+									serviceInput.set("language", language);
 									serviceInput.set("changeTracker", artifact.getConfig().getChangeTracker() == null ? null : artifact.getConfig().getChangeTracker().getId());
 									output.set("updated[" + counter++ + "]", new MaskedContent(updateInstance, updateOutput));
 									

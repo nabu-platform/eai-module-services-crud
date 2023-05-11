@@ -83,6 +83,11 @@
 			<scope>provided</scope>
 		</dependency>
 		<dependency>
+			<groupId>be.nabu.libs.http</groupId>
+			<artifactId>http-jwt</artifactId>
+			<scope>provided</scope>
+		</dependency>
+		<dependency>
 			<groupId>be.nabu.libs.services</groupId>
 			<artifactId>services-jdbc</artifactId>
 			<scope>provided</scope>

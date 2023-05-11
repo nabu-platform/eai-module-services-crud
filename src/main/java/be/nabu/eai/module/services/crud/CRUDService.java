@@ -272,9 +272,7 @@ public class CRUDService implements DefinedService, WebFragment, RESTFragment, A
 						serviceInput.set("transactionId", transactionId);
 						serviceInput.set("typeId", artifact.getConfig().getCoreType().getId());
 						serviceInput.set("coreTypeId", artifact.getConfig().getCoreType().getId());
-						if (artifact.getConfig().isUseLanguage()) {
-							serviceInput.set("language", language);
-						}
+						serviceInput.set("language", language);
 						serviceInput.set("changeTracker", artifact.getConfig().getChangeTracker() == null ? null : artifact.getConfig().getChangeTracker().getId());
 						
 						if (!artifact.getConfig().isUseListOutputForUpdate()) {
@@ -307,9 +305,7 @@ public class CRUDService implements DefinedService, WebFragment, RESTFragment, A
 						serviceInput.set("transactionId", transactionId);
 						// don't count when we are getting!
 						serviceInput.set("totalCount", TotalCount.NONE);
-						if (artifact.getConfig().isUseLanguage()) {
-							serviceInput.set("language", language);
-						}
+						serviceInput.set("language", language);
 						serviceInput.set("limit", 1);
 						CRUDFilter idFilter = new CRUDFilter();
 						Element<?> typePrimary = getPrimary((ComplexType) artifact.getConfig().getCoreType());
@@ -331,9 +327,7 @@ public class CRUDService implements DefinedService, WebFragment, RESTFragment, A
 						serviceInput.set("coreTypeId", artifact.getConfig().getCoreType().getId());
 						serviceInput.set("connectionId", connectionId);
 						serviceInput.set("transactionId", transactionId);
-						if (artifact.getConfig().isUseLanguage()) {
-							serviceInput.set("language", language);
-						}
+						serviceInput.set("language", language);
 						// we set the max limit if none is provided
 						// the max limit itself can be null
 						Integer limit = input == null ? null : (Integer) input.get("limit");
@@ -620,9 +614,7 @@ public class CRUDService implements DefinedService, WebFragment, RESTFragment, A
 					input.add(new ComplexElementImpl("instance", createInput, input));
 				break;
 				case UPDATE:
-					if (artifact.getConfig().isUseLanguage()) {
-						input.add(new SimpleElementImpl<String>("language", SimpleTypeWrapperFactory.getInstance().getWrapper().wrap(String.class), input, new ValueImpl<Integer>(MinOccursProperty.getInstance(), 0)));
-					}
+					input.add(new SimpleElementImpl<String>("language", SimpleTypeWrapperFactory.getInstance().getWrapper().wrap(String.class), input, new ValueImpl<Integer>(MinOccursProperty.getInstance(), 0)));
 					input.add(new SimpleElementImpl("id", (SimpleType<?>) primary.getType(), input));
 					input.add(new ComplexElementImpl("instance", updateInput, input));
 				break;
@@ -631,17 +623,13 @@ public class CRUDService implements DefinedService, WebFragment, RESTFragment, A
 				break;
 				case GET:
 					input.add(new SimpleElementImpl("id", (SimpleType<?>) primary.getType(), input));
-					if (artifact.getConfig().isUseLanguage()) {
-						input.add(new SimpleElementImpl<String>("language", SimpleTypeWrapperFactory.getInstance().getWrapper().wrap(String.class), input, new ValueImpl<Integer>(MinOccursProperty.getInstance(), 0)));
-					}
+					input.add(new SimpleElementImpl<String>("language", SimpleTypeWrapperFactory.getInstance().getWrapper().wrap(String.class), input, new ValueImpl<Integer>(MinOccursProperty.getInstance(), 0)));
 				break;
 				case LIST:
 					// we don't add the "contextId" as input explicitly
 					// you can choose via the filters whether you want to add it or not
 					// if you set a security context _and_ add the context as a filter, it will be properly exposed (also through REST)
-					if (artifact.getConfig().isUseLanguage()) {
-						input.add(new SimpleElementImpl<String>("language", SimpleTypeWrapperFactory.getInstance().getWrapper().wrap(String.class), input, new ValueImpl<Integer>(MinOccursProperty.getInstance(), 0)));
-					}
+					input.add(new SimpleElementImpl<String>("language", SimpleTypeWrapperFactory.getInstance().getWrapper().wrap(String.class), input, new ValueImpl<Integer>(MinOccursProperty.getInstance(), 0)));
 					input.add(new SimpleElementImpl<Integer>("limit", SimpleTypeWrapperFactory.getInstance().getWrapper().wrap(Integer.class), input, new ValueImpl<Integer>(MinOccursProperty.getInstance(), 0)));
 					input.add(new SimpleElementImpl<Long>("offset", SimpleTypeWrapperFactory.getInstance().getWrapper().wrap(Long.class), input, new ValueImpl<Integer>(MinOccursProperty.getInstance(), 0)));
 					input.add(new SimpleElementImpl<String>("orderBy", SimpleTypeWrapperFactory.getInstance().getWrapper().wrap(String.class), input, new ValueImpl<Integer>(MinOccursProperty.getInstance(), 0), new ValueImpl<Integer>(MaxOccursProperty.getInstance(), 0)));

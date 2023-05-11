@@ -336,7 +336,7 @@ public class CRUDListener implements EventHandler<HTTPRequest, HTTPResponse> {
 			throw e;
 		}
 		catch (Exception e) {
-			HTTPException httpException = new HTTPException(500, "Could not execute service", "Could not execute service: " + service.getId(), e, token);
+			HTTPException httpException = new HTTPException(500, "Could not execute service: " + service.getId(), "Could not execute service: " + service.getId(), e, token);
 			httpException.getContext().addAll(Arrays.asList(service.getId()));
 			httpException.setDevice(device);
 			throw httpException;
@@ -564,7 +564,9 @@ public class CRUDListener implements EventHandler<HTTPRequest, HTTPResponse> {
 					}
 				}
 				if (parentQueryName != null) {
-					input.set("filter/" + parentQueryName + "[0]", context);
+					// this is now potentially prefixed with the security context
+//					input.set("filter/" + parentQueryName + "[0]", context);
+					input.set("filter/" + parentQueryName + "[0]", pathParameters.get("contextId"));
 				}
 			break;
 		}
