@@ -29,6 +29,7 @@ import be.nabu.eai.module.web.application.WebApplication;
 import be.nabu.eai.module.web.application.WebApplicationUtils;
 import be.nabu.eai.module.web.application.api.TemporaryAuthenticator;
 import be.nabu.eai.repository.EAIRepositoryUtils;
+import be.nabu.eai.repository.EAIResourceRepository;
 import be.nabu.eai.repository.api.LanguageProvider;
 import be.nabu.eai.repository.util.Filter;
 import be.nabu.libs.authentication.api.Authenticator;
@@ -490,6 +491,14 @@ public class CRUDListener implements EventHandler<HTTPRequest, HTTPResponse> {
 					throw new HTTPException(token == null ? 401 : 403, "User does not have permission to execute the rest service", "User '" + (token == null ? Authenticator.ANONYMOUS : token.getName()) + "' does not have permission to run the CRUD service: " + service.getId(), token);
 				}
 			}
+			if (EAIResourceRepository.isDevelopment()) {
+				if (action != null) {
+					responseHeaders.add(new MimeHeader("X-Checked-Permission-Action", action));
+				}
+				if (context != null) {
+					responseHeaders.add(new MimeHeader("X-Checked-Permission-Context", context));
+				}
+			}
 			ServiceRuntime.getGlobalContext().put("service.context", application.getId());
 		}
 		
@@ -578,6 +587,11 @@ public class CRUDListener implements EventHandler<HTTPRequest, HTTPResponse> {
 //		ServiceUtils.setServiceContext(runtime, application.getId());
 		// get the smarter service context
 		ServiceUtils.setServiceContext(runtime, serviceContext);
+		
+		if (EAIResourceRepository.isDevelopment()) {
+			responseHeaders.add(new MimeHeader("X-Service-Id", service.getId()));
+			responseHeaders.add(new MimeHeader("X-Service-Context", serviceContext));
+		}
 		
 		runtime.getContext().put("webApplicationId", application.getId());
 		ComplexContent output = runtime.run(input);
