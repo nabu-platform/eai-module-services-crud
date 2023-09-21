@@ -981,6 +981,7 @@ public class CRUDArtifactGUIManager extends BaseJAXBGUIManager<CRUDConfiguration
 		if ((limitToForeign && !foreignKeys.isEmpty()) || (!limitToForeign && !children.isEmpty())) {
 			// populate the combobox with foreign keys
 			ComboBox<String> box = new ComboBox<String>();
+			box.getItems().add(null);
 			
 			List<String> fields = new ArrayList<String>(limitToForeign ? foreignKeys.keySet() : children);
 			Collections.sort(fields);
