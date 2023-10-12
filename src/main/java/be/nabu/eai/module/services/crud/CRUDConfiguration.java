@@ -96,6 +96,8 @@ public class CRUDConfiguration {
 	
 	private Boolean primaryKeySecurityContext;
 	
+	private boolean useAsAuthorizationServiceContext;
+	
 	// the name is necessary for some things like permissions, components...
 	// if none is set, we assume the root name of the document
 	private String basePath, name;
@@ -393,6 +395,13 @@ public class CRUDConfiguration {
 	}
 	public void setHooks(boolean hooks) {
 		this.hooks = hooks;
+	}
+	
+	public boolean isUseAsAuthorizationServiceContext() {
+		return useAsAuthorizationServiceContext;
+	}
+	public void setUseAsAuthorizationServiceContext(boolean useAsAuthorizationServiceContext) {
+		this.useAsAuthorizationServiceContext = useAsAuthorizationServiceContext;
 	}
 	
 }

@@ -33,6 +33,7 @@ import be.nabu.eai.repository.resources.RepositoryEntry;
 import be.nabu.eai.repository.util.SystemPrincipal;
 import be.nabu.jfx.control.tree.Tree;
 import be.nabu.libs.artifacts.api.Artifact;
+import be.nabu.libs.property.ValueUtils;
 import be.nabu.libs.property.api.Property;
 import be.nabu.libs.property.api.Value;
 import be.nabu.libs.services.api.DefinedService;
@@ -45,6 +46,7 @@ import be.nabu.libs.types.api.DefinedType;
 import be.nabu.libs.types.api.Element;
 import be.nabu.libs.types.api.SimpleType;
 import be.nabu.libs.types.base.ValueImpl;
+import be.nabu.libs.types.properties.CollectionCrudProviderProperty;
 import be.nabu.libs.types.properties.ForeignKeyProperty;
 import be.nabu.libs.validator.api.Validation;
 import javafx.application.Platform;
@@ -115,6 +117,20 @@ public class CRUDArtifactGUIManager extends BaseJAXBGUIManager<CRUDConfiguration
 		artifact.getConfig().setDeleteRole(new ArrayList<String>(asList));
 		if (artifact.getConfig().getCoreType() == null) {
 			throw new IllegalStateException("You need to define a type");
+		}
+		String crudProvider = ValueUtils.getValue(CollectionCrudProviderProperty.getInstance(), artifact.getConfig().getCoreType().getProperties());
+		if (crudProvider == null) {
+			crudProvider = "default";
+		}
+		for (CRUDProviderArtifact potentialProvider : entry.getRepository().getArtifacts(CRUDProviderArtifact.class)) {
+			Map<String, String> nodeProperties = entry.getRepository().getNode(potentialProvider.getId()).getProperties();
+			if (nodeProperties != null && nodeProperties.containsKey("crudProvider")) {
+				String providerName = nodeProperties.get("crudProvider");
+				if (providerName != null && providerName.equals(crudProvider)) {
+					artifact.getConfig().setProvider(potentialProvider);
+					break;
+				}
+			}
 		}
 		return artifact;
 	}
@@ -1052,6 +1068,8 @@ public class CRUDArtifactGUIManager extends BaseJAXBGUIManager<CRUDConfiguration
 	}
 	
 	private void populateChecklist(CRUDArtifact instance, Pane pane, List<String> list, List<String> toIgnore, boolean respectProviderBlacklist) {
+		TextField search = new TextField();
+		search.setPromptText("Search fields");
 		TilePane checkboxes = new TilePane();
 		checkboxes.setOrientation(Orientation.VERTICAL);
 		// the rows/columns
@@ -1067,6 +1085,7 @@ public class CRUDArtifactGUIManager extends BaseJAXBGUIManager<CRUDConfiguration
 				continue;
 			}
 			CheckBox box = new CheckBox(field);
+			box.setId(field);
 			box.setSelected(list.indexOf(field) >= 0);
 			box.selectedProperty().addListener(new ChangeListener<Boolean>() {
 				@Override
@@ -1085,9 +1104,47 @@ public class CRUDArtifactGUIManager extends BaseJAXBGUIManager<CRUDConfiguration
 			TilePane.setMargin(box, new Insets(3, 20, 0, 0));
 			checkboxes.getChildren().add(box);
 		}
+		search.textProperty().addListener(new ChangeListener<String>() {
+			@Override
+			public void changed(ObservableValue<? extends String> observable, String oldValue, String newValue) {
+				for (Node node : checkboxes.getChildren()) {
+					CheckBox box = (CheckBox) node;
+					boolean visible = newValue == null || newValue.trim().isEmpty() || box.getId().toLowerCase().contains(newValue.toLowerCase());
+					box.setManaged(visible);
+					box.setVisible(visible);
+				}
+			}
+		});
 		// we want approximitely 4 columns (max) with at least 5 per column
 		checkboxes.setPrefRows((int) Math.max(5, Math.ceil(checkboxes.getChildren().size() / 4)));
-		pane.getChildren().add(checkboxes);
+		
+		VBox vbox = new VBox();
+		vbox.setSpacing(10);
+		HBox top = new HBox();
+		top.setSpacing(10);
+		Button selectAll = new Button("Select all");
+		selectAll.addEventHandler(ActionEvent.ANY, new EventHandler<ActionEvent>() {
+			@Override
+			public void handle(ActionEvent event) {
+				for (Node node : checkboxes.getChildren()) {
+					CheckBox box = (CheckBox) node;
+					box.setSelected(true);
+				}
+			}
+		});
+		Button deselectAll = new Button("Deselect all");
+		deselectAll.addEventHandler(ActionEvent.ANY, new EventHandler<ActionEvent>() {
+			@Override
+			public void handle(ActionEvent event) {
+				for (Node node : checkboxes.getChildren()) {
+					CheckBox box = (CheckBox) node;
+					box.setSelected(false);
+				}
+			}
+		});
+		top.getChildren().addAll(search, selectAll, deselectAll);
+		vbox.getChildren().addAll(top, checkboxes);
+		pane.getChildren().add(vbox);
 	}
 	
 	private static List<String> fields(List<ForeignNameField> foreignFields, DefinedType coreType, boolean includeForeignFields) {

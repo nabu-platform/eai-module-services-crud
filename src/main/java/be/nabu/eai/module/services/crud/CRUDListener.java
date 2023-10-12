@@ -56,6 +56,7 @@ import be.nabu.libs.http.glue.GlueListener.PathAnalysis;
 import be.nabu.libs.http.jwt.JWTBody;
 import be.nabu.libs.http.jwt.JWTUtils;
 import be.nabu.libs.http.jwt.enums.JWTAlgorithm;
+import be.nabu.libs.property.ValueUtils;
 import be.nabu.libs.resources.URIUtils;
 import be.nabu.libs.services.ServiceRuntime;
 import be.nabu.libs.services.ServiceUtils;
@@ -63,12 +64,14 @@ import be.nabu.libs.services.api.ExecutionContext;
 import be.nabu.libs.services.api.ServiceException;
 import be.nabu.libs.types.ComplexContentWrapperFactory;
 import be.nabu.libs.types.SimpleTypeWrapperFactory;
+import be.nabu.libs.types.TypeUtils;
 import be.nabu.libs.types.api.ComplexContent;
 import be.nabu.libs.types.api.ComplexType;
 import be.nabu.libs.types.api.DefinedType;
 import be.nabu.libs.types.api.Element;
 import be.nabu.libs.types.api.KeyValuePair;
 import be.nabu.libs.types.api.SimpleType;
+import be.nabu.libs.types.base.Scope;
 import be.nabu.libs.types.base.SimpleElementImpl;
 import be.nabu.libs.types.base.ValueImpl;
 import be.nabu.libs.types.binding.api.MarshallableBinding;
@@ -78,6 +81,7 @@ import be.nabu.libs.types.binding.json.JSONBinding;
 import be.nabu.libs.types.binding.xml.XMLBinding;
 import be.nabu.libs.types.properties.MaxOccursProperty;
 import be.nabu.libs.types.properties.MinOccursProperty;
+import be.nabu.libs.types.properties.ScopeProperty;
 import be.nabu.libs.types.structure.Structure;
 import be.nabu.libs.types.utils.KeyValuePairImpl;
 import be.nabu.utils.io.IOUtils;
@@ -423,7 +427,7 @@ public class CRUDListener implements EventHandler<HTTPRequest, HTTPResponse> {
 			}
 		}
 		
-		String serviceContext = WebApplicationUtils.getServiceContext(token, application, request);
+		String serviceContext = WebApplicationUtils.getServiceContext(token, application, request, artifact.getConfig().isAllowHeaderAsQueryParameter() ? "$serviceContext" : null, artifact.getConfig().isUseAsAuthorizationServiceContext() ? service.getId() : null);
 		
 		PermissionHandler permissionHandler = application.getPermissionHandler();
 		if (permissionHandler != null) {
@@ -578,6 +582,23 @@ public class CRUDListener implements EventHandler<HTTPRequest, HTTPResponse> {
 					input.set("filter/" + parentQueryName + "[0]", pathParameters.get("contextId"));
 				}
 			break;
+		}
+		
+		Structure providerParameters = service.getProviderParameters();
+		if (providerParameters != null) {
+			for (Element<?> element : TypeUtils.getAllChildren(providerParameters)) {
+				// public simple types may need to be filled in from the frontend
+				if (element.getType() instanceof SimpleType) {
+					Scope value = ValueUtils.getValue(ScopeProperty.getInstance(), element.getProperties());
+					if (value == null || value == Scope.PUBLIC) {
+						List<String> list = queryProperties.get(element.getName());
+						if (list != null && !list.isEmpty()) {
+							Integer maxOccurs = ValueUtils.getValue(MaxOccursProperty.getInstance(), element.getProperties());
+							input.set("provider/" + element.getName(), maxOccurs == null || maxOccurs == 1 ? list.get(0) : list);
+						}
+					}
+				}
+			}
 		}
 		
 		ServiceRuntime runtime = new ServiceRuntime(service, executionContext);

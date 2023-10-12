@@ -29,6 +29,7 @@ import be.nabu.libs.events.api.EventSubscription;
 import be.nabu.libs.http.api.HTTPRequest;
 import be.nabu.libs.http.api.HTTPResponse;
 import be.nabu.libs.http.server.HTTPServerUtils;
+import be.nabu.libs.property.ValueUtils;
 import be.nabu.libs.property.api.Value;
 import be.nabu.libs.services.ServiceRuntime;
 import be.nabu.libs.services.api.DefinedService;
@@ -46,6 +47,7 @@ import be.nabu.libs.types.api.Element;
 import be.nabu.libs.types.api.SimpleType;
 import be.nabu.libs.types.api.Type;
 import be.nabu.libs.types.base.ComplexElementImpl;
+import be.nabu.libs.types.base.Scope;
 import be.nabu.libs.types.base.SimpleElementImpl;
 import be.nabu.libs.types.base.TypeBaseUtils;
 import be.nabu.libs.types.base.ValueImpl;
@@ -55,6 +57,7 @@ import be.nabu.libs.types.properties.GeneratedProperty;
 import be.nabu.libs.types.properties.MaxOccursProperty;
 import be.nabu.libs.types.properties.MinOccursProperty;
 import be.nabu.libs.types.properties.PrimaryKeyProperty;
+import be.nabu.libs.types.properties.ScopeProperty;
 import be.nabu.libs.types.structure.DefinedStructure;
 import be.nabu.libs.types.structure.Structure;
 
@@ -554,7 +557,7 @@ public class CRUDService implements DefinedService, WebFragment, RESTFragment, A
 	// the parameters that are added to the input by the implementation service, this can allow for dynamic behavior
 	private Structure providerParameters = null;
 	private boolean providerParametersResolved = false;
-	private Structure getProviderParameters() {
+	public Structure getProviderParameters() {
 		if (!providerParametersResolved) {
 			synchronized(this) {
 				if (!providerParametersResolved) {
@@ -996,6 +999,7 @@ public class CRUDService implements DefinedService, WebFragment, RESTFragment, A
 			parameters.add(new SimpleElementImpl<Integer>("limit", SimpleTypeWrapperFactory.getInstance().getWrapper().wrap(Integer.class), input, new ValueImpl<Integer>(MinOccursProperty.getInstance(), 0)));
 			parameters.add(new SimpleElementImpl<Long>("offset", SimpleTypeWrapperFactory.getInstance().getWrapper().wrap(Long.class), input, new ValueImpl<Integer>(MinOccursProperty.getInstance(), 0)));
 			parameters.add(new SimpleElementImpl<String>("orderBy", SimpleTypeWrapperFactory.getInstance().getWrapper().wrap(String.class), input, new ValueImpl<Integer>(MinOccursProperty.getInstance(), 0), new ValueImpl<Integer>(MaxOccursProperty.getInstance(), 0)));
+			
 			if (artifact.getConfig().isUseLanguage() && artifact.getConfig().isUseExplicitLanguage()) {
 				parameters.add(new SimpleElementImpl<String>("language", SimpleTypeWrapperFactory.getInstance().getWrapper().wrap(String.class), input, new ValueImpl<Integer>(MinOccursProperty.getInstance(), 0)));
 			}
@@ -1043,6 +1047,21 @@ public class CRUDService implements DefinedService, WebFragment, RESTFragment, A
 			Structure input = new Structure();
 			parameters.add(new SimpleElementImpl<String>("language", SimpleTypeWrapperFactory.getInstance().getWrapper().wrap(String.class), input, new ValueImpl<Integer>(MinOccursProperty.getInstance(), 0)));
 		}
+		
+		// check if we have non private provider parameters, they are likely necessary to make it work
+		Structure providerParameters = getProviderParameters();
+		if (providerParameters != null) {
+			for (Element<?> element : TypeUtils.getAllChildren(providerParameters)) {
+				// public simple types may  need to be filled in from the frontend
+				if (element.getType() instanceof SimpleType) {
+					Scope value = ValueUtils.getValue(ScopeProperty.getInstance(), element.getProperties());
+					if (value == null || value == Scope.PUBLIC) {
+						parameters.add(new SimpleElementImpl<String>(element.getName(), (SimpleType) element.getType(), input, element.getProperties()));
+					}
+				}
+			}
+		}
+		
 		return parameters;
 	}
 
