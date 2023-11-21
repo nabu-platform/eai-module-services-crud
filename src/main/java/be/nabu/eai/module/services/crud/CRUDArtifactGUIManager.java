@@ -50,10 +50,13 @@ import be.nabu.libs.types.properties.CollectionCrudProviderProperty;
 import be.nabu.libs.types.properties.ForeignKeyProperty;
 import be.nabu.libs.validator.api.Validation;
 import javafx.application.Platform;
+import javafx.beans.binding.Bindings;
 import javafx.beans.property.SimpleStringProperty;
 import javafx.beans.property.StringProperty;
 import javafx.beans.value.ChangeListener;
 import javafx.beans.value.ObservableValue;
+import javafx.collections.FXCollections;
+import javafx.collections.ObservableList;
 import javafx.event.ActionEvent;
 import javafx.event.EventHandler;
 import javafx.geometry.Insets;
@@ -82,6 +85,8 @@ public class CRUDArtifactGUIManager extends BaseJAXBGUIManager<CRUDConfiguration
 
 	private VBox tableContainer;
 	private CRUDArtifact instance;
+	
+	private static ObservableList<String> blacklistClipboard = FXCollections.observableArrayList();
 
 	static {
 		URL resource = CRUDArtifactGUIManager.class.getClassLoader().getResource("crud.css");
@@ -115,6 +120,8 @@ public class CRUDArtifactGUIManager extends BaseJAXBGUIManager<CRUDConfiguration
 		artifact.getConfig().setCreateRole(new ArrayList<String>(asList));
 		artifact.getConfig().setUpdateRole(new ArrayList<String>(asList));
 		artifact.getConfig().setDeleteRole(new ArrayList<String>(asList));
+		artifact.getConfig().setUseListOutputForCreate(true);
+		artifact.getConfig().setUseListOutputForUpdate(true);
 		if (artifact.getConfig().getCoreType() == null) {
 			throw new IllegalStateException("You need to define a type");
 		}
@@ -123,6 +130,11 @@ public class CRUDArtifactGUIManager extends BaseJAXBGUIManager<CRUDConfiguration
 			crudProvider = "default";
 		}
 		for (CRUDProviderArtifact potentialProvider : entry.getRepository().getArtifacts(CRUDProviderArtifact.class)) {
+			// can map it on id?
+			if (potentialProvider.getId().equals(crudProvider)) {
+				artifact.getConfig().setProvider(potentialProvider);
+				break;
+			}
 			Map<String, String> nodeProperties = entry.getRepository().getNode(potentialProvider.getId()).getProperties();
 			if (nodeProperties != null && nodeProperties.containsKey("crudProvider")) {
 				String providerName = nodeProperties.get("crudProvider");
@@ -242,12 +254,14 @@ public class CRUDArtifactGUIManager extends BaseJAXBGUIManager<CRUDConfiguration
 		accordion.setExpandedPane(list);
 		
 		left.setContent(accordion);
-		tableContainer = new VBox();
-		right.setContent(tableContainer);
-		pane.getChildren().add(split);
-		maximize(accordion);
-		tableContainer.setPadding(new Insets(5));
-		displayContent(tableContainer, instance);
+//		tableContainer = new VBox();
+//		right.setContent(tableContainer);
+//		pane.getChildren().add(split);
+//		maximize(accordion);
+//		tableContainer.setPadding(new Insets(5));
+//		displayContent(tableContainer, instance);
+		maximize(left);
+		pane.getChildren().add(left);
 	}
 	
 	@Override
@@ -380,7 +394,7 @@ public class CRUDArtifactGUIManager extends BaseJAXBGUIManager<CRUDConfiguration
 		if (instance.getConfig().getCreateBlacklistFields() == null) {
 			instance.getConfig().setCreateBlacklistFields(new ArrayList<String>());
 		}
-		populateChecklist(instance, main, instance.getConfig().getCreateBlacklistFields(), list, true);
+		populateChecklist(instance, main, instance.getConfig().getCreateBlacklistFields(), list, true, true); // buildCopyButton("Copy from List", instance.getConfig().getListBlacklistFields(), instance.getConfig().getCreateBlacklistFields()
 		
 		maximize(main);
 	}
@@ -400,7 +414,7 @@ public class CRUDArtifactGUIManager extends BaseJAXBGUIManager<CRUDConfiguration
 		if (instance.getConfig().getUpdateBlacklistFields() == null) {
 			instance.getConfig().setUpdateBlacklistFields(new ArrayList<String>());
 		}
-		populateChecklist(instance, main, instance.getConfig().getUpdateBlacklistFields(), list, true);
+		populateChecklist(instance, main, instance.getConfig().getUpdateBlacklistFields(), list, true, true);
 		
 		boolean foundAny = false;
 		label = new Label("Choose the fields you want to regenerate:");
@@ -422,7 +436,7 @@ public class CRUDArtifactGUIManager extends BaseJAXBGUIManager<CRUDConfiguration
 				instance.getConfig().setUpdateRegenerateFields(new ArrayList<String>());
 			}
 			main.getChildren().add(label);
-			populateChecklist(instance, main, instance.getConfig().getUpdateRegenerateFields(), ignore, true);
+			populateChecklist(instance, main, instance.getConfig().getUpdateRegenerateFields(), ignore, true, false);
 		}
 		maximize(main);
 	}
@@ -480,7 +494,7 @@ public class CRUDArtifactGUIManager extends BaseJAXBGUIManager<CRUDConfiguration
 		if (instance.getBlacklistFields() == null) {
 			instance.setBlacklistFields(new ArrayList<String>());
 		}
-		populateChecklist(artifact, fields, instance.getBlacklistFields(), new ArrayList<String>(), false);
+		populateChecklist(artifact, fields, instance.getBlacklistFields(), new ArrayList<String>(), false, true);
 		
 		VBox foreign = new VBox();
 		foreign.getStyleClass().add("section");
@@ -1067,7 +1081,21 @@ public class CRUDArtifactGUIManager extends BaseJAXBGUIManager<CRUDConfiguration
 		return key;
 	}
 	
-	private void populateChecklist(CRUDArtifact instance, Pane pane, List<String> list, List<String> toIgnore, boolean respectProviderBlacklist) {
+	// not compatible with future vision of having as many views as you want!
+	private Button buildCopyButton(String title, List<String> fromBlacklist, List<String> toBlacklist) {
+		Button button = new Button(title);
+		button.addEventHandler(ActionEvent.ANY, new EventHandler<ActionEvent>() {
+			@Override
+			public void handle(ActionEvent event) {
+				toBlacklist.clear();
+				toBlacklist.addAll(fromBlacklist);
+				MainController.getInstance().setChanged();
+			}
+		});
+		return button;
+	}
+	
+	private void populateChecklist(CRUDArtifact instance, Pane pane, List<String> list, List<String> toIgnore, boolean respectProviderBlacklist, boolean allowCopyPaste, Button...buttons) {
 		TextField search = new TextField();
 		search.setPromptText("Search fields");
 		TilePane checkboxes = new TilePane();
@@ -1142,7 +1170,32 @@ public class CRUDArtifactGUIManager extends BaseJAXBGUIManager<CRUDConfiguration
 				}
 			}
 		});
+		Button paste = new Button("Paste selection");
+		Button copy = new Button("Copy selection");
+		copy.addEventHandler(ActionEvent.ANY, new EventHandler<ActionEvent>() {
+			@Override
+			public void handle(ActionEvent event) {
+				blacklistClipboard.clear();
+				blacklistClipboard.addAll(list);
+			}
+		});
+		paste.addEventHandler(ActionEvent.ANY, new EventHandler<ActionEvent>() {
+			@Override
+			public void handle(ActionEvent event) {
+				for (Node node : checkboxes.getChildren()) {
+					CheckBox box = (CheckBox) node;
+					box.setSelected(blacklistClipboard.indexOf(box.getId()) >= 0);
+				}
+			}
+		});
+		paste.disableProperty().bind(Bindings.size(blacklistClipboard).isEqualTo(0));
 		top.getChildren().addAll(search, selectAll, deselectAll);
+		if (allowCopyPaste) {
+			top.getChildren().addAll(copy, paste);	
+		}
+		if (buttons != null && buttons.length > 0) {
+			top.getChildren().addAll(buttons);
+		}
 		vbox.getChildren().addAll(top, checkboxes);
 		pane.getChildren().add(vbox);
 	}
