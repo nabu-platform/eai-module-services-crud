@@ -383,12 +383,12 @@ public class CRUDService implements DefinedService, WebFragment, RESTFragment, A
 							if (result.getResults() != null && !result.getResults().isEmpty()) {
 								output.set("results", result.getResults());
 							}
+							Integer limit = input == null ? null : (Integer) input.get("limit");
+							if (listAction.getMaxLimit() != null) {
+								limit = limit == null ? listAction.getMaxLimit() : Math.min(limit, listAction.getMaxLimit());
+							}
 							// if we have a total row count, build the page object
 							if (result.getTotalRowCount() != null) {
-								Integer limit = input == null ? null : (Integer) input.get("limit");
-								if (listAction.getMaxLimit() != null) {
-									limit = limit == null ? listAction.getMaxLimit() : Math.min(limit, listAction.getMaxLimit());
-								}
 								output.set("page", Page.build(result.getTotalRowCount(), input == null ? null : (Long) input.get("offset"), limit));
 							}
 							else {
@@ -396,7 +396,9 @@ public class CRUDService implements DefinedService, WebFragment, RESTFragment, A
 								if (rowCount == null) {
 									rowCount = result.getResults() != null ? result.getResults().size() : 0l;
 								}
-								output.set("page", Page.build(rowCount, 0l, rowCount.intValue()));
+								// if we pass in an offset, we can calculate the page we are on
+								output.set("page", Page.build(rowCount.intValue(), input == null ? null : (Long) input.get("offset"), limit));
+								//output.set("page", Page.build(rowCount, 0l, rowCount.intValue()));
 							}
 						}
 					break;

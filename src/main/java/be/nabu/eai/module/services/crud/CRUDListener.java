@@ -96,6 +96,8 @@ import be.nabu.utils.mime.impl.PlainMimeEmptyPart;
 
 // TODO: fix security context!
 public class CRUDListener implements EventHandler<HTTPRequest, HTTPResponse> {
+
+	private static boolean DYNAMIC_204 = Boolean.parseBoolean(System.getProperty("dynamic.204", "true"));
 	
 	private CRUDArtifact artifact;
 	private String parentPath;
@@ -326,7 +328,8 @@ public class CRUDListener implements EventHandler<HTTPRequest, HTTPResponse> {
 				return new DefaultHTTPResponse(request, 200, HTTPCodes.getMessage(200), part);
 			}
 			else {
-				return new DefaultHTTPResponse(request, 200, HTTPCodes.getMessage(200), new PlainMimeEmptyPart(null, 
+				int responseCode = DYNAMIC_204 ? 204 : 200;
+				return new DefaultHTTPResponse(request, responseCode, HTTPCodes.getMessage(responseCode), new PlainMimeEmptyPart(null, 
 					new MimeHeader("Content-Length", "0")));
 			}
 		}
