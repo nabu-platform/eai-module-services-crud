@@ -363,9 +363,6 @@ public class CRUDService implements DefinedService, WebFragment, RESTFragment, A
 							if (customFilters != null) {
 								allFilters.addAll(customFilters);
 							}
-							System.out.println("QUERYING " + getId() + " WITH FILTERS: " + allFilters);
-							System.out.println("\tDEFAULT " + listAction.getFilters());
-							System.out.println("\tCUSTOM " + customFilters);
 							transformFilters(allFilters, input, filters);
 						}
 						serviceInput.set("filters", filters);
