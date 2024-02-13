@@ -20,7 +20,6 @@ import be.nabu.eai.repository.resources.MemoryEntry;
 import be.nabu.libs.artifacts.api.Artifact;
 import be.nabu.libs.property.api.Value;
 import be.nabu.libs.resources.api.ResourceContainer;
-import be.nabu.libs.services.api.DefinedService;
 import be.nabu.libs.types.TypeUtils;
 import be.nabu.libs.types.api.ComplexType;
 import be.nabu.libs.types.api.DefinedType;
@@ -45,6 +44,9 @@ import be.nabu.libs.types.structure.Structure;
 
 public class CRUDArtifactManager extends JAXBArtifactManager<CRUDConfiguration, CRUDArtifact> implements ArtifactRepositoryManager<CRUDArtifact> {
 
+	// not necessary because enrichment process has been retrofitted to directly support the list service
+	private boolean useEnrichment = false;
+	
 	public CRUDArtifactManager() {
 		super(CRUDArtifact.class);
 	}
@@ -178,9 +180,14 @@ public class CRUDArtifactManager extends JAXBArtifactManager<CRUDConfiguration, 
 				}
 			}
 			if (artifact.getConfig().getProvider() != null && artifact.getConfig().getProvider().getConfig().getListService() != null) {
-				addChild(artifact, entries, services, "list", new CRUDService(artifact, services.getId() + ".list", CRUDType.LIST, createInput, updateInput, outputList, updateIntermediaryInput, output, createOutput, updateOutput, artifact.asListAction()), "List");
+				CRUDService listService = new CRUDService(artifact, services.getId() + ".list", CRUDType.LIST, createInput, updateInput, outputList, updateIntermediaryInput, output, createOutput, updateOutput, artifact.asListAction());
+				addChild(artifact, entries, services, "list", listService, "List");
 				if (!primary.isEmpty()) {
 					addChild(artifact, entries, services, "get", new CRUDService(artifact, services.getId() + ".get", CRUDType.GET, createInput, updateInput, outputList, updateIntermediaryInput, output, createOutput, updateOutput, artifact.asListAction()), "Get");
+				}
+				if (useEnrichment) {
+					ModifiableEntry enrichment = EAIRepositoryUtils.getParent(parent, "enrichment", true);
+					addChild(artifact, entries, enrichment, "apply", new CRUDEnrichmentService(enrichment.getId() + ".apply", listService), "Apply");
 				}
 			}
 			if (!primary.isEmpty() && artifact.getConfig().getProvider() != null && artifact.getConfig().getProvider().getConfig().getDeleteService() != null) {
@@ -416,6 +423,8 @@ public class CRUDArtifactManager extends JAXBArtifactManager<CRUDConfiguration, 
 		removeRecursively(services, entries);
 		ModifiableEntry batchServices = EAIRepositoryUtils.getParent(parent, "batch", true);
 		removeRecursively(batchServices, entries);
+		ModifiableEntry enrichment = EAIRepositoryUtils.getParent(parent, "enrichment", true);
+		removeRecursively(enrichment, entries);
 		entries.add(structures);
 		entries.add(services);
 		entries.add(batchServices);
