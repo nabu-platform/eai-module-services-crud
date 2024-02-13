@@ -18,6 +18,7 @@ import be.nabu.eai.repository.api.Repository;
 import be.nabu.eai.repository.managers.base.JAXBArtifactManager;
 import be.nabu.eai.repository.resources.MemoryEntry;
 import be.nabu.libs.artifacts.api.Artifact;
+import be.nabu.libs.property.ValueUtils;
 import be.nabu.libs.property.api.Value;
 import be.nabu.libs.resources.api.ResourceContainer;
 import be.nabu.libs.types.TypeUtils;
@@ -31,12 +32,14 @@ import be.nabu.libs.types.base.ValueImpl;
 import be.nabu.libs.types.java.BeanResolver;
 import be.nabu.libs.types.properties.CollectionNameProperty;
 import be.nabu.libs.types.properties.DuplicateProperty;
+import be.nabu.libs.types.properties.EnricherProperty;
 import be.nabu.libs.types.properties.ForeignKeyProperty;
 import be.nabu.libs.types.properties.ForeignNameProperty;
 import be.nabu.libs.types.properties.GeneratedProperty;
 import be.nabu.libs.types.properties.MaxOccursProperty;
 import be.nabu.libs.types.properties.MinOccursProperty;
 import be.nabu.libs.types.properties.NameProperty;
+import be.nabu.libs.types.properties.PersisterProperty;
 import be.nabu.libs.types.properties.PrimaryKeyProperty;
 import be.nabu.libs.types.properties.RestrictProperty;
 import be.nabu.libs.types.structure.DefinedStructure;
@@ -145,7 +148,14 @@ public class CRUDArtifactManager extends JAXBArtifactManager<CRUDConfiguration, 
 				if (artifact.getConfig().getForeignFields() != null) {
 					injectForeignFields(artifact.getConfig().getForeignFields(), artifact.getConfig().getCoreType(), artifact.getRepository(), output);
 				}
-				
+				String currentEnricher = ValueUtils.getValue(EnricherProperty.getInstance(), artifact.getConfig().getCoreType().getProperties());
+				if (currentEnricher == null) {
+					output.setProperty(new ValueImpl<String>(EnricherProperty.getInstance(), parent.getId() + ".services.list"));
+				}
+				String currentPersister = ValueUtils.getValue(PersisterProperty.getInstance(), artifact.getConfig().getCoreType().getProperties());
+				if (currentPersister == null) {
+					output.setProperty(new ValueImpl<String>(PersisterProperty.getInstance(), parent.getId() + ".batch.updateAll"));
+				}
 				outputList = new DefinedStructure();
 				outputList.setName(artifact.getConfig().getCoreType().getName() + "List");
 				outputList.setId(types.getId() + ".outputList");
