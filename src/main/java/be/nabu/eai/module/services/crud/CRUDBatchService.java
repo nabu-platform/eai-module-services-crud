@@ -1,9 +1,16 @@
 package be.nabu.eai.module.services.crud;
 
+import java.util.ArrayList;
 import java.util.Date;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 import be.nabu.eai.module.services.crud.CRUDService.CRUDType;
+import be.nabu.eai.repository.EAIResourceRepository;
+import be.nabu.eai.repository.api.ObjectEnricher;
+import be.nabu.libs.artifacts.api.Artifact;
 import be.nabu.libs.services.ServiceRuntime;
 import be.nabu.libs.services.api.DefinedService;
 import be.nabu.libs.services.api.ExecutionContext;
@@ -19,6 +26,7 @@ import be.nabu.libs.types.api.ComplexContent;
 import be.nabu.libs.types.api.ComplexType;
 import be.nabu.libs.types.api.Element;
 import be.nabu.libs.types.api.SimpleType;
+import be.nabu.libs.types.api.Type;
 import be.nabu.libs.types.base.ComplexElementImpl;
 import be.nabu.libs.types.base.SimpleElementImpl;
 import be.nabu.libs.types.base.ValueImpl;
@@ -28,7 +36,7 @@ import be.nabu.libs.types.properties.MinOccursProperty;
 import be.nabu.libs.types.structure.DefinedStructure;
 import be.nabu.libs.types.structure.Structure;
 
-public class CRUDBatchService implements DefinedService {
+public class CRUDBatchService implements DefinedService, ObjectEnricher {
 
 	private CRUDArtifact artifact;
 	private String id;
@@ -201,16 +209,8 @@ public class CRUDBatchService implements DefinedService {
 							if (handler == null) {
 								throw new IllegalArgumentException("Invalid list object");
 							}
-							for (Object object : handler.getAsIterable(deleteId)) {
-								serviceInput = artifact.getConfig().getProvider().getConfig().getDeleteService().getServiceInterface().getInputDefinition().newInstance();
-								serviceInput.set("id", object);
-								serviceInput.set("typeId", artifact.getConfig().getCoreType().getId());
-								serviceInput.set("connectionId", connectionId);
-								serviceInput.set("transactionId", transactionId);
-//								serviceInput.set("language", language);
-								serviceInput.set("changeTracker", artifact.getConfig().getChangeTracker() == null ? null : artifact.getConfig().getChangeTracker().getId());
-								ServiceRuntime runtime = new ServiceRuntime(service, executionContext);
-								runtime.run(serviceInput);
+							for (Object singleId : handler.getAsIterable(deleteId)) {
+								deleteId(executionContext, connectionId, transactionId, singleId);
 							}
 						}
 					break;
@@ -218,6 +218,30 @@ public class CRUDBatchService implements DefinedService {
 				return output;
 			}
 		};
+	}
+	private void deleteId(ExecutionContext executionContext, String connectionId, String transactionId, Object singleId) throws ServiceException {
+		ComplexContent serviceInput = artifact.getConfig().getProvider().getConfig().getDeleteService().getServiceInterface().getInputDefinition().newInstance();
+		serviceInput.set("id", singleId);
+		serviceInput.set("typeId", artifact.getConfig().getCoreType().getId());
+		serviceInput.set("connectionId", connectionId);
+		serviceInput.set("transactionId", transactionId);
+//								serviceInput.set("language", language);
+		serviceInput.set("changeTracker", artifact.getConfig().getChangeTracker() == null ? null : artifact.getConfig().getChangeTracker().getId());
+		ServiceRuntime runtime = new ServiceRuntime(artifact.getConfig().getProvider().getConfig().getDeleteService(), executionContext);
+		runtime.run(serviceInput);
+	}
+	
+	private void createSingle(ExecutionContext executionContext, String connectionId, String transactionId, String language, ComplexContent single) throws ServiceException {
+		ComplexContent serviceInput = artifact.getConfig().getProvider().getConfig().getCreateService().getServiceInterface().getInputDefinition().newInstance();
+		serviceInput.set("instance", single);
+		serviceInput.set("connectionId", connectionId);
+		serviceInput.set("transactionId", transactionId);
+		serviceInput.set("language", language);
+		serviceInput.set("typeId", artifact.getConfig().getCoreType().getId());
+		serviceInput.set("coreTypeId", artifact.getConfig().getCoreType().getId());
+		serviceInput.set("changeTracker", artifact.getConfig().getChangeTracker() == null ? null : artifact.getConfig().getChangeTracker().getId());
+		ServiceRuntime runtime = new ServiceRuntime(artifact.getConfig().getProvider().getConfig().getCreateService(), executionContext);
+		runtime.run(serviceInput);
 	}
 
 	@Override
@@ -228,6 +252,141 @@ public class CRUDBatchService implements DefinedService {
 	@Override
 	public String getId() {
 		return id;
+	}
+
+	@Override
+	public void apply(String typeId, String language, List<Object> instances, String keyField, List<String> fieldsToEnrich) throws ServiceException {
+		throw new UnsupportedOperationException();
+	}
+
+	@Override
+	public void persist(String typeId, String language, List<Object> instances, String keyField, List<String> fieldsToPersist) throws ServiceException {
+		if (type != CRUDType.UPDATE) {
+			throw new UnsupportedOperationException();	
+		}
+		if (keyField == null) {
+			throw new IllegalArgumentException("Need a key field, not provided for: " + typeId);
+		}
+		if (fieldsToPersist == null) {
+			throw new IllegalArgumentException("No persisted fields found for: " + typeId);
+		}
+		if (instances.size() > 0) {
+			// we get the list service, it should provide use with an object enrichment target to fetch the current instances (to detect a delta)
+			CRUDService service = (CRUDService) EAIResourceRepository.getInstance().resolve(artifact.getId() + ".services.list");
+			List<ComplexContent> contents = new ArrayList<ComplexContent>();
+			Type targetType = null;
+			for (Object single : instances) {
+				if (single == null) {
+					continue;
+				}
+				if (!(single instanceof ComplexContent)) {
+					single = ComplexContentWrapperFactory.getInstance().getWrapper().wrap(single);
+					if (single == null) {
+						throw new IllegalArgumentException("Could not cast to complex content");
+					}
+				}
+				if (targetType == null) {
+					targetType = ((ComplexContent) single).getType();
+				}
+				contents.add((ComplexContent) single);
+			}
+			Element<?> foreignKeyField = service.getForeignKeyField(targetType);
+			
+			List<Object> ids = new ArrayList<Object>();
+			for (ComplexContent content : contents) {
+				ids.add(content.get(keyField));
+			}
+			
+			Map<Object, List<Object>> asIs = service.getRecordMap(language, foreignKeyField, ids);
+			List<Object> toDelete = new ArrayList<Object>();
+			List<Object> toUpdate = new ArrayList<Object>();
+			List<Object> toCreate = new ArrayList<Object>();
+			System.out.println("as is: " + asIs);
+			for (ComplexContent content : contents) {
+				Object primaryKey = content.get(keyField);
+				if (asIs.containsKey(primaryKey)) {
+					System.out.println("Checking " + fieldsToPersist + " for id: " + primaryKey);
+					for (String field : fieldsToPersist) {
+						Element<?> fieldElement = content.getType().get(field);
+						boolean isList = fieldElement.getType().isList(fieldElement.getProperties());
+						List<Object> currentList = asIs.get(primaryKey);
+						Object toBe = content.get(field);
+						if (isList) {
+							List<Object> toBeList = (List<Object>) toBe;
+							if (toBeList == null || toBeList.isEmpty()) {
+								if (currentList != null && !currentList.isEmpty()) {
+									toDelete.addAll(currentList);
+								}
+							}
+							else if (currentList == null || currentList.isEmpty()) {
+								toCreate.addAll(toBeList);
+							}
+							else {
+								// TODO: get ids from one and the other, compare to see if we need to update, delete or create
+								Map<Object, Object> currentIds = new HashMap<Object, Object>();
+								for (Object single : currentList) {
+									currentIds.put(service.getPrimaryKey((ComplexContent) single), single);
+								}
+								for (Object single : toBeList) {
+									Object singleKey = service.getPrimaryKey((ComplexContent) single);
+									if (currentIds.containsKey(singleKey)) {
+										toUpdate.add(single);
+										currentIds.remove(singleKey);
+									}
+									else {
+										toCreate.add(single);
+									}
+								}
+								toDelete.addAll(currentIds.values());
+							}
+						}
+						else {
+							Object current = currentList == null || currentList.isEmpty() ? null : currentList.get(0); 
+							if (toBe == null) {
+								if (current != null) {
+									toDelete.add(current);
+								}
+							}
+							else if (current == null) {
+								if (toBe != null) {
+									toCreate.add(current);
+								}
+							}
+							else {
+								// TODO: check that anything is actually changed before updating (?)
+								Object currentPrimaryKey = service.getPrimaryKey((ComplexContent) current);
+								Object toBePrimaryKey = service.getPrimaryKey((ComplexContent) toBe);
+								if (toBePrimaryKey.equals(currentPrimaryKey)) {
+									toUpdate.add(current);
+								}
+								else {
+									toDelete.add(current);
+									toCreate.add(toBe);
+								}
+							}
+						}
+					}
+				}
+			}
+			System.out.println("Result is:");
+			System.out.println("\t" + toCreate);
+			System.out.println("\t" + toDelete);
+			System.out.println("\t" + toUpdate);
+			for (Object single : toDelete) {
+				deleteId(ServiceRuntime.getRuntime().getExecutionContext(), null, null, service.getPrimaryKey((ComplexContent) single));
+			}
+			if (!toUpdate.isEmpty()) {
+				ComplexContent updateInput = getServiceInterface().getInputDefinition().newInstance();
+				updateInput.set("instance", toUpdate);
+				updateInput.set("language", language);
+				newInstance().execute(ServiceRuntime.getRuntime().getExecutionContext(), updateInput);
+			}
+			if (!toCreate.isEmpty()) {
+				for (Object single : toCreate) {
+					createSingle(ServiceRuntime.getRuntime().getExecutionContext(), null, null, language, (ComplexContent) single);
+				}
+			}
+		}
 	}
 
 }

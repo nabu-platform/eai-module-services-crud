@@ -443,7 +443,7 @@ public class CRUDService implements DefinedService, WebFragment, RESTFragment, A
 		};
 	}
 	
-	private Object getPrimaryKey(ComplexContent content) {
+	Object getPrimaryKey(ComplexContent content) {
 		Element<?> primary = getPrimary((ComplexType) artifact.getConfig().getCoreType());
 		return content.get(primary.getName());
 	}
@@ -1214,72 +1214,15 @@ public class CRUDService implements DefinedService, WebFragment, RESTFragment, A
 				}
 				contents.add((ComplexContent) single);
 			}
-			List<String> foreignKeyTargets = new ArrayList<String>();
-			while (targetType != null) {
-				if (targetType instanceof DefinedType) {
-					foreignKeyTargets.add(((DefinedType) targetType).getId());
-				}
-				targetType = targetType.getSuperType();
-			}
-			Element<?> foreignKeyField = null;
-			// we assume a foreign key exists in the _core_ table
-			for (Element<?> field : TypeUtils.getAllChildren((ComplexType) artifact.getConfig().getCoreType())) {
-				String foreignKey = ValueUtils.getValue(ForeignKeyProperty.getInstance(), field.getProperties());
-				if (foreignKey != null && foreignKeyTargets.contains(foreignKey.split(":")[0])) {
-					foreignKeyField = field;
-					break;
-				}
-			}
-			// we assume you imported it then?
-			// it MUST be in the resultset, otherwise we can't bind it back correctly
-			if (foreignKeyField == null) {
-				for (Element<?> field : TypeUtils.getAllChildren(singleOutput)) {
-					String foreignKey = ValueUtils.getValue(ForeignKeyProperty.getInstance(), field.getProperties());
-					if (foreignKey != null && foreignKeyTargets.contains(foreignKey.split(":")[0])) {
-						foreignKeyField = field;
-						break;
-					}
-				}
-			}
-			if (foreignKeyField == null) {
-				throw new IllegalStateException("Could not find foreign key link from " + artifact.getConfig().getCoreType().getId() + " to any of: " + foreignKeyTargets);
-			}
+			Element<?> foreignKeyField = getForeignKeyField(targetType);
 			
 			List<Object> ids = new ArrayList<Object>();
 			for (ComplexContent content : contents) {
 				ids.add(content.get(keyField));
 			}
 			
-			CRUDFilter customFilter = new CRUDFilter();
-			customFilter.setKey(foreignKeyField.getName());
-			customFilter.setOperator("=");
-			customFilter.setValues(ids);
-			customFilter.setInput(true);
-			ServiceInstance newInstance = newInstance(Arrays.asList(customFilter));
-			ComplexContent input = getServiceInterface().getInputDefinition().newInstance();
-			if (language != null) {
-				input.set("language", language);
-			}
-			ComplexContent output = newInstance.execute(ServiceRuntime.getRuntime().getExecutionContext(), input);
-			List<Object> records = (List<Object>) output.get("results");
-			if (records != null && !records.isEmpty()) {
-				Map<Object, List<Object>> recordMap = new HashMap<Object, List<Object>>();
-				for (Object single : records) {
-					if (single == null) {
-						continue;
-					}
-					if (!(single instanceof ComplexContent)) {
-						single = ComplexContentWrapperFactory.getInstance().getWrapper().wrap(single);
-						if (single == null) {
-							throw new IllegalArgumentException("Could not be cast");
-						}
-					}
-					Object foreignKeyValue = ((ComplexContent) single).get(foreignKeyField.getName());
-					if (!recordMap.containsKey(foreignKeyValue)) {
-						recordMap.put(foreignKeyValue, new ArrayList<Object>());
-					}
-					recordMap.get(foreignKeyValue).add(single);
-				}
+			Map<Object, List<Object>> recordMap = getRecordMap(language, foreignKeyField, ids);
+			if (!recordMap.isEmpty()) {
 				for (ComplexContent content : contents) {
 					Object primaryKey = content.get(keyField);
 					if (recordMap.containsKey(primaryKey)) {
@@ -1292,8 +1235,77 @@ public class CRUDService implements DefinedService, WebFragment, RESTFragment, A
 		}
 	}
 
+	Map<Object, List<Object>> getRecordMap(String language, Element<?> foreignKeyField, List<Object> ids) throws ServiceException {
+		CRUDFilter customFilter = new CRUDFilter();
+		customFilter.setKey(foreignKeyField.getName());
+		customFilter.setOperator("=");
+		customFilter.setValues(ids);
+		customFilter.setInput(true);
+		ServiceInstance newInstance = newInstance(Arrays.asList(customFilter));
+		ComplexContent input = getServiceInterface().getInputDefinition().newInstance();
+		if (language != null) {
+			input.set("language", language);
+		}
+		ComplexContent output = newInstance.execute(ServiceRuntime.getRuntime().getExecutionContext(), input);
+		List<Object> records = (List<Object>) output.get("results");
+		Map<Object, List<Object>> recordMap = new HashMap<Object, List<Object>>();
+		if (records != null && !records.isEmpty()) {
+			for (Object single : records) {
+				if (single == null) {
+					continue;
+				}
+				if (!(single instanceof ComplexContent)) {
+					single = ComplexContentWrapperFactory.getInstance().getWrapper().wrap(single);
+					if (single == null) {
+						throw new IllegalArgumentException("Could not be cast");
+					}
+				}
+				Object foreignKeyValue = ((ComplexContent) single).get(foreignKeyField.getName());
+				if (!recordMap.containsKey(foreignKeyValue)) {
+					recordMap.put(foreignKeyValue, new ArrayList<Object>());
+				}
+				recordMap.get(foreignKeyValue).add(single);
+			}
+		}
+		return recordMap;
+	}
+
+	Element<?> getForeignKeyField(Type targetType) {
+		List<String> foreignKeyTargets = new ArrayList<String>();
+		while (targetType != null) {
+			if (targetType instanceof DefinedType) {
+				foreignKeyTargets.add(((DefinedType) targetType).getId());
+			}
+			targetType = targetType.getSuperType();
+		}
+		Element<?> foreignKeyField = null;
+		// we assume a foreign key exists in the _core_ table
+		for (Element<?> field : TypeUtils.getAllChildren((ComplexType) artifact.getConfig().getCoreType())) {
+			String foreignKey = ValueUtils.getValue(ForeignKeyProperty.getInstance(), field.getProperties());
+			if (foreignKey != null && foreignKeyTargets.contains(foreignKey.split(":")[0])) {
+				foreignKeyField = field;
+				break;
+			}
+		}
+		// we assume you imported it then?
+		// it MUST be in the resultset, otherwise we can't bind it back correctly
+		if (foreignKeyField == null) {
+			for (Element<?> field : TypeUtils.getAllChildren(singleOutput)) {
+				String foreignKey = ValueUtils.getValue(ForeignKeyProperty.getInstance(), field.getProperties());
+				if (foreignKey != null && foreignKeyTargets.contains(foreignKey.split(":")[0])) {
+					foreignKeyField = field;
+					break;
+				}
+			}
+		}
+		if (foreignKeyField == null) {
+			throw new IllegalStateException("Could not find foreign key link from " + artifact.getConfig().getCoreType().getId() + " to any of: " + foreignKeyTargets);
+		}
+		return foreignKeyField;
+	}
+
 	@Override
 	public void persist(String typeId, String language, List<Object> instances, String keyField, List<String> fieldsToPersist) {
-		
+		throw new UnsupportedOperationException();
 	}
 }
