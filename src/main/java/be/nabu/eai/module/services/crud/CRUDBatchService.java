@@ -301,11 +301,9 @@ public class CRUDBatchService implements DefinedService, ObjectEnricher {
 			List<Object> toDelete = new ArrayList<Object>();
 			List<Object> toUpdate = new ArrayList<Object>();
 			List<Object> toCreate = new ArrayList<Object>();
-			System.out.println("as is: " + asIs);
 			for (ComplexContent content : contents) {
 				Object primaryKey = content.get(keyField);
 				if (asIs.containsKey(primaryKey)) {
-					System.out.println("Checking " + fieldsToPersist + " for id: " + primaryKey);
 					for (String field : fieldsToPersist) {
 						Element<?> fieldElement = content.getType().get(field);
 						boolean isList = fieldElement.getType().isList(fieldElement.getProperties());
@@ -368,10 +366,6 @@ public class CRUDBatchService implements DefinedService, ObjectEnricher {
 					}
 				}
 			}
-			System.out.println("Result is:");
-			System.out.println("\t" + toCreate);
-			System.out.println("\t" + toDelete);
-			System.out.println("\t" + toUpdate);
 			for (Object single : toDelete) {
 				deleteId(ServiceRuntime.getRuntime().getExecutionContext(), null, null, service.getPrimaryKey((ComplexContent) single));
 			}
