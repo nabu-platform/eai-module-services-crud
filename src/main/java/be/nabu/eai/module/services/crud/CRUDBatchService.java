@@ -243,6 +243,19 @@ public class CRUDBatchService implements DefinedService, ObjectEnricher {
 		ServiceRuntime runtime = new ServiceRuntime(artifact.getConfig().getProvider().getConfig().getCreateService(), executionContext);
 		runtime.run(serviceInput);
 	}
+	private void updateSingle(ExecutionContext executionContext, String connectionId, String transactionId, String language, ComplexContent single) throws ServiceException {
+		ComplexContent serviceInput = artifact.getConfig().getProvider().getConfig().getUpdateService().getServiceInterface().getInputDefinition().newInstance();
+		// because we use restrictions where we synchronize the collection name etc, the update statement that is generated in the end should only update the fields you selected
+		// as such we don't need to do anything
+		serviceInput.set("instance", single);
+		serviceInput.set("connectionId", connectionId);
+		serviceInput.set("transactionId", transactionId);
+		serviceInput.set("typeId", artifact.getConfig().getCoreType().getId());
+		serviceInput.set("language", language);
+		serviceInput.set("changeTracker", artifact.getConfig().getChangeTracker() == null ? null : artifact.getConfig().getChangeTracker().getId());
+		ServiceRuntime runtime = new ServiceRuntime(artifact.getConfig().getProvider().getConfig().getUpdateService(), executionContext);
+		runtime.run(serviceInput);
+	}
 
 	@Override
 	public Set<String> getReferences() {
@@ -370,10 +383,9 @@ public class CRUDBatchService implements DefinedService, ObjectEnricher {
 				deleteId(ServiceRuntime.getRuntime().getExecutionContext(), null, null, service.getPrimaryKey((ComplexContent) single));
 			}
 			if (!toUpdate.isEmpty()) {
-				ComplexContent updateInput = getServiceInterface().getInputDefinition().newInstance();
-				updateInput.set("instance", toUpdate);
-				updateInput.set("language", language);
-				newInstance().execute(ServiceRuntime.getRuntime().getExecutionContext(), updateInput);
+				for (Object single : toUpdate) {
+					updateSingle(ServiceRuntime.getRuntime().getExecutionContext(), null, null, language, (ComplexContent) single);
+				}
 			}
 			if (!toCreate.isEmpty()) {
 				for (Object single : toCreate) {
