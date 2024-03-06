@@ -218,13 +218,15 @@ public class CRUDService implements DefinedService, WebFragment, RESTFragment, A
 										createInstance.set(element.getName(), UUID.randomUUID().toString().replace("-", ""));
 									}
 								}
-								// if we have a date, we initiate it as "current", we assume something like created or modified
-								else if (Date.class.isAssignableFrom(((SimpleType<?>) element.getType()).getInstanceClass())) {
-									createInstance.set(element.getName(), new Date());
-								}
-								// booleans are false by default
-								else if (Boolean.class.isAssignableFrom(((SimpleType<?>) element.getType()).getInstanceClass())) {
-									createInstance.set(element.getName(), false);
+								else if (element.getType() instanceof SimpleType) {
+									// if we have a date, we initiate it as "current", we assume something like created or modified
+									if (Date.class.isAssignableFrom(((SimpleType<?>) element.getType()).getInstanceClass())) {
+										createInstance.set(element.getName(), new Date());
+									}
+									// booleans are false by default
+									else if (Boolean.class.isAssignableFrom(((SimpleType<?>) element.getType()).getInstanceClass())) {
+										createInstance.set(element.getName(), false);
+									}
 								}
 							}
 						}
