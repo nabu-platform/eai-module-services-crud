@@ -23,7 +23,8 @@ public interface CRUDProvider {
 			@WebParam(name = "limit") Integer limit, 
 			@WebParam(name = "offset") Long offset,
 			@WebParam(name = "totalCount") TotalCount totalCount,
-			@WebParam(name = "orderBy") List<String> orderBy, 
+			@WebParam(name = "orderBy") List<String> orderBy,
+			@WebParam(name = "statistics") List<String> statistics,
 			@WebParam(name = "filters") List<CRUDFilter> filters,
 			@WebParam(name = "language") String language,
 			// it is unclear if we want generic configuration at this point 

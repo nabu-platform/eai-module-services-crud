@@ -21,6 +21,9 @@ public class CRUDProviderConfiguration {
 	private List<String> blacklistedFields;
 	
 	private Boolean primaryKeySecurityContext;
+	
+	// Whether or not you support statistics
+	private boolean supportsStatistics;
 
 	@XmlJavaTypeAdapter(value = ArtifactXMLAdapter.class)
 	@InterfaceFilter(implement = "be.nabu.eai.module.services.crud.api.CRUDProvider.list")
@@ -111,6 +114,12 @@ public class CRUDProviderConfiguration {
 	}
 	public void setPrimaryKeySecurityContext(Boolean primaryKeySecurityContext) {
 		this.primaryKeySecurityContext = primaryKeySecurityContext;
+	}
+	public boolean isSupportsStatistics() {
+		return supportsStatistics;
+	}
+	public void setSupportsStatistics(boolean supportsStatistics) {
+		this.supportsStatistics = supportsStatistics;
 	}
 
 }

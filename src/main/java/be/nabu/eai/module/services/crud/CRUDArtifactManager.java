@@ -21,6 +21,7 @@ import be.nabu.libs.artifacts.api.Artifact;
 import be.nabu.libs.property.ValueUtils;
 import be.nabu.libs.property.api.Value;
 import be.nabu.libs.resources.api.ResourceContainer;
+import be.nabu.libs.services.jdbc.api.Statistic;
 import be.nabu.libs.types.TypeUtils;
 import be.nabu.libs.types.api.ComplexType;
 import be.nabu.libs.types.api.DefinedType;
@@ -160,6 +161,9 @@ public class CRUDArtifactManager extends JAXBArtifactManager<CRUDConfiguration, 
 				outputList.setName(artifact.getConfig().getCoreType().getName() + "List");
 				outputList.setId(types.getId() + ".outputList");
 				outputList.add(new ComplexElementImpl("results", output, outputList, new ValueImpl<Integer>(MinOccursProperty.getInstance(), 0), new ValueImpl<Integer>(MaxOccursProperty.getInstance(), 0)));
+				if (artifact.getConfig().getProvider() != null && artifact.getConfig().getProvider().getConfig().isSupportsStatistics()) {
+					outputList.add(new ComplexElementImpl("statistics", (ComplexType) BeanResolver.getInstance().resolve(Statistic.class), outputList, new ValueImpl<Integer>(MinOccursProperty.getInstance(), 0), new ValueImpl<Integer>(MaxOccursProperty.getInstance(), 0)));	
+				}
 				outputList.add(new ComplexElementImpl("page", (ComplexType) BeanResolver.getInstance().resolve(Page.class), outputList, new ValueImpl<Integer>(MinOccursProperty.getInstance(), 0)));
 				EAINode node = new EAINode();
 				node.setArtifactClass(DefinedStructure.class);

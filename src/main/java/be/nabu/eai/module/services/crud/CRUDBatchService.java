@@ -1,6 +1,7 @@
 package be.nabu.eai.module.services.crud;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
@@ -8,6 +9,7 @@ import java.util.Map;
 import java.util.Set;
 
 import be.nabu.eai.module.services.crud.CRUDService.CRUDType;
+import be.nabu.eai.repository.EAIRepositoryUtils;
 import be.nabu.eai.repository.EAIResourceRepository;
 import be.nabu.eai.repository.api.ObjectEnricher;
 import be.nabu.libs.artifacts.api.Artifact;
@@ -164,6 +166,7 @@ public class CRUDBatchService implements DefinedService, ObjectEnricher {
 								throw new IllegalStateException("Could not find primary key field definition for updating");
 							}
 							int counter = 0;
+							List<Object> updatedInstances = new ArrayList<Object>();
 							// for now we just loop, in the future we can update providers to allow for smart batch updating etc
 							for (Object object : handler.getAsIterable(list)) {
 								if (object != null) {
@@ -183,6 +186,7 @@ public class CRUDBatchService implements DefinedService, ObjectEnricher {
 											}
 										}
 									}
+									updatedInstances.add(updateInstance);
 									
 									serviceInput = artifact.getConfig().getProvider().getConfig().getUpdateService().getServiceInterface().getInputDefinition().newInstance();
 									// because we use restrictions where we synchronize the collection name etc, the update statement that is generated in the end should only update the fields you selected
@@ -199,6 +203,9 @@ public class CRUDBatchService implements DefinedService, ObjectEnricher {
 									runtime.run(serviceInput);
 								}
 							}
+							if (!updatedInstances.isEmpty()) {
+								EAIRepositoryUtils.persist(updatedInstances, language, executionContext);
+							}
 						}
 						
 					break;
@@ -213,6 +220,7 @@ public class CRUDBatchService implements DefinedService, ObjectEnricher {
 								deleteId(executionContext, connectionId, transactionId, singleId);
 							}
 						}
+						// TODO: no enrichment delete yet...
 					break;
 				}
 				return output;

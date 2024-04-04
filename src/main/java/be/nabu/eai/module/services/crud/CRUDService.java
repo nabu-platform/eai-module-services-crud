@@ -181,7 +181,7 @@ public class CRUDService implements DefinedService, WebFragment, RESTFragment, A
 				ComplexContent output = getServiceInterface().getOutputDefinition().newInstance();
 				ComplexContent serviceInput = null;
 				Object object;
-				MaskedContent createInstance = null;
+				MaskedContent createInstance = null, updateInstance = null;
 				switch(type) {
 					case CREATE:
 						object = input == null ? null : input.get("instance");
@@ -247,6 +247,7 @@ public class CRUDService implements DefinedService, WebFragment, RESTFragment, A
 						if (!artifact.getConfig().isUseListOutputForCreate()) {
 							output.set("created", new MaskedContent(createInstance, createOutput));
 						}
+						
 					break;
 					case UPDATE:
 						object = input == null ? null : input.get("instance");
@@ -257,7 +258,7 @@ public class CRUDService implements DefinedService, WebFragment, RESTFragment, A
 						}
 						
 						// we want to map the primary key and optionally add some other things
-						MaskedContent updateInstance = new MaskedContent((ComplexContent) object, updateIntermediaryInput);
+						updateInstance = new MaskedContent((ComplexContent) object, updateIntermediaryInput);
 						Element<?> primary = getPrimary(updateInstance.getType());
 						if (primary == null) {
 							throw new IllegalStateException("Could not find primary key field definition for updating");
@@ -354,6 +355,7 @@ public class CRUDService implements DefinedService, WebFragment, RESTFragment, A
 						serviceInput.set("offset", input == null ? null : input.get("offset"));
 						serviceInput.set("totalCount", totalCount == null ? TotalCount.EXACT : totalCount);
 						serviceInput.set("orderBy", input == null ? null : input.get("orderBy"));
+						serviceInput.set("statistics", input == null ? null : input.get("statistics"));
 						serviceInput.set("limitToUser", input == null ? null : input.get("limitToUser"));
 						serviceInput.set("lazy", input == null ? null : input.get("lazy"));
 						List<Filter> filters = new ArrayList<Filter>();
@@ -397,7 +399,14 @@ public class CRUDService implements DefinedService, WebFragment, RESTFragment, A
 						if (serviceOutput != null && serviceOutput.get("results") != null) {
 							ListResult result = TypeUtils.getAsBean((ComplexContent) serviceOutput.get("results"), ListResult.class);
 							if (result.getResults() != null && !result.getResults().isEmpty()) {
-								output.set("results", result.getResults());
+								List<Object> results = result.getResults();
+								if (results != null) {
+									EAIRepositoryUtils.enrich(results, language, executionContext);
+								}
+								output.set("results", results);
+							}
+							if (result.getStatistics() != null) {
+								output.set("statistics", result.getStatistics());
 							}
 							Integer limit = input == null ? null : (Integer) input.get("limit");
 							if (listAction.getMaxLimit() != null) {
@@ -422,7 +431,12 @@ public class CRUDService implements DefinedService, WebFragment, RESTFragment, A
 						if (serviceOutput != null && serviceOutput.get("results") != null) {
 							ListResult result = TypeUtils.getAsBean((ComplexContent) serviceOutput.get("results"), ListResult.class);
 							if (result.getResults() != null && !result.getResults().isEmpty()) {
-								output.set("result", result.getResults().get(0));
+								Object value = result.getResults().get(0);
+								// perform any enrichment persistance
+								if (value != null) {
+									EAIRepositoryUtils.enrich(Arrays.asList(value), language, executionContext);
+								}
+								output.set("result", value);
 							}
 						}
 					break;
@@ -430,14 +444,33 @@ public class CRUDService implements DefinedService, WebFragment, RESTFragment, A
 					case CREATE:
 						artifact.checkHooks(executionContext, connectionId, transactionId, (ComplexContent) (type == CRUDType.UPDATE ? output.get("updated") : output.get("created")), type == CRUDType.UPDATE, true);
 						artifact.checkBroadcast(executionContext, connectionId, transactionId, (ComplexContent) serviceInput.get("instance"), type == CRUDType.UPDATE, true);
+						
+						// perform any enrichment persistance
+						if (createInstance != null) {
+							EAIRepositoryUtils.persist(Arrays.asList(createInstance), language, executionContext);
+						}
+						if (updateInstance != null) {
+							EAIRepositoryUtils.persist(Arrays.asList(updateInstance), language, executionContext);
+						}
+					break;
+					case DELETE:
+						// TODO: we can't delete enrichment yet...? hopefully they be soft deletes...
 					break;
 				}
 				if (type == CRUDType.UPDATE && artifact.getConfig().isUseListOutputForUpdate()) {
 					Object updateId = input == null ? null : input.get("id");
-					output.set("updated", getSingleResult(executionContext, updateId, connectionId, transactionId, language));
+					Object singleResult = getSingleResult(executionContext, updateId, connectionId, transactionId, language);
+					if (singleResult != null) {
+						EAIRepositoryUtils.enrich(Arrays.asList(singleResult), language, executionContext);
+					}
+					output.set("updated", singleResult);
 				}
 				else if (type == CRUDType.CREATE && artifact.getConfig().isUseListOutputForCreate()) {
-					output.set("created", getSingleResult(executionContext, getPrimaryKey(createInstance), connectionId, transactionId, language));
+					Object singleResult = getSingleResult(executionContext, getPrimaryKey(createInstance), connectionId, transactionId, language);
+					if (singleResult != null) {
+						EAIRepositoryUtils.enrich(Arrays.asList(singleResult), language, executionContext);
+					}
+					output.set("created", singleResult);
 				}
 				return output;
 			}
@@ -530,6 +563,10 @@ public class CRUDService implements DefinedService, WebFragment, RESTFragment, A
 				// could be a list or not a list
 				if (inputtedValues instanceof Iterable) {
 					for (Object inputtedValue : (Iterable<Object>) inputtedValues) {
+						// for a case insensitive equals, we put a "lower" in front of the actual field, but we need to lowercase the values at the application level
+						if (newFilter.isCaseInsensitive() && newFilter.getOperator().equals("=") && inputtedValue != null) {
+							inputtedValue = inputtedValue.toString().toLowerCase();
+						}
 						values.add(inputtedValue);
 					}
 				}
@@ -661,6 +698,9 @@ public class CRUDService implements DefinedService, WebFragment, RESTFragment, A
 					input.add(new SimpleElementImpl<Boolean>("limitToUser", SimpleTypeWrapperFactory.getInstance().getWrapper().wrap(Boolean.class), input, new ValueImpl<Integer>(MinOccursProperty.getInstance(), 0), new ValueImpl<String>(CommentProperty.getInstance(), "If you enable this, the provider should try to limit the result set to data that the current user is allowed to see")));
 					input.add(new SimpleElementImpl<Boolean>("lazy", SimpleTypeWrapperFactory.getInstance().getWrapper().wrap(Boolean.class), input, new ValueImpl<Integer>(MinOccursProperty.getInstance(), 0), new ValueImpl<String>(CommentProperty.getInstance(), "If you enable lazy mode, the provider will try to provide a lazy list, if it can not, a full list might be returned")));
 					input.add(new SimpleElementImpl<TotalCount>("totalCount", SimpleTypeWrapperFactory.getInstance().getWrapper().wrap(TotalCount.class), input, new ValueImpl<Integer>(MinOccursProperty.getInstance(), 0), new ValueImpl<String>(CommentProperty.getInstance(), "By default all results will be counted exactly. This can have a lot of performance impact in some cases. An estimated count is faster but not exact or you can turn counting off entirely.")));
+					if (artifact.getConfig().getProvider() != null && artifact.getConfig().getProvider().getConfig().isSupportsStatistics()) {
+						input.add(new SimpleElementImpl<String>("statistics", SimpleTypeWrapperFactory.getInstance().getWrapper().wrap(String.class), input, new ValueImpl<Integer>(MinOccursProperty.getInstance(), 0), new ValueImpl<Integer>(MaxOccursProperty.getInstance(), 0)));
+					}
 					if (listAction.getFilters() != null) {
 						Structure filters = new Structure();
 						filters.setName("filter");
@@ -684,7 +724,7 @@ public class CRUDService implements DefinedService, WebFragment, RESTFragment, A
 										childElement = new SimpleElementImpl(filter.getAlias() == null ? filter.getKey() : filter.getAlias(), (SimpleType<?>) element.getType(), filters, new ValueImpl<Integer>(MinOccursProperty.getInstance(), 0));
 									}
 									// only for some filters do we support the list entries
-									if ("=".equals(filter.getOperator()) || "<>".equals(filter.getOperator())) {
+									if ("=".equals(filter.getOperator()) || "<>".equals(filter.getOperator()) || "=~".equals(filter.getOperator())) {
 										// for boolean data types a list also makes little sense
 										if (!Boolean.class.isAssignableFrom(((SimpleType<?>) childElement.getType()).getInstanceClass())) {
 											childElement.setProperty(new ValueImpl<Integer>(MaxOccursProperty.getInstance(), 0));
