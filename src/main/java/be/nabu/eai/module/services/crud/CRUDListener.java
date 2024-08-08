@@ -733,6 +733,9 @@ public class CRUDListener implements EventHandler<HTTPRequest, HTTPResponse> {
 								else if (operator.equals("like")) {
 									operator = "~";
 								}
+								else if (operator.equals("not like")) {
+									operator = "!~";
+								}
 								
 								if (!vary) {
 									query += " " + filter.getKey();

@@ -76,12 +76,12 @@ import be.nabu.libs.types.structure.Structure;
 // TODO: provider parameters: allow to fill in via query params? or choose to expose or not
 public class CRUDService implements DefinedService, WebFragment, RESTFragment, ArtifactWithExceptions, DownloadableFragment, ObjectEnricher {
 
-	public static List<String> inputOperators = Arrays.asList("=", "<>", ">", "<", ">=", "<=", "like", "ilike", "=~", "!=~");
+	public static List<String> inputOperators = Arrays.asList("=", "<>", ">", "<", ">=", "<=", "like", "ilike", "not like", "not ilike", "=~", "!=~");
 	// we needed operators to indicate case insensitive equals (and not equals)
 	// the azure kusto query language was one of the few that I found with a dedicated operator for this, although they use !~ for the not equals
 	// i want to reserve ~ and !~ for the meaning they have in nabu (regex), so there is a slight deviation at that point
 	// for a very short time the operator was i= to be in sync with the ilike. !i= is harder to read though
-	public static List<String> operators = Arrays.asList("=", "<>", ">", "<", ">=", "<=", "is null", "is not null", "like", "ilike", "=~", "!=~");
+	public static List<String> operators = Arrays.asList("=", "<>", ">", "<", ">=", "<=", "is null", "is not null", "like", "ilike", "not like", "not ilike", "=~", "!=~");
 	
 	public enum TotalCount {
 		EXACT,
@@ -537,6 +537,10 @@ public class CRUDService implements DefinedService, WebFragment, RESTFragment, A
 				newFilter.setOperator("like");
 				newFilter.setCaseInsensitive(true);
 			}
+			else if ("not ilike".equals(filter.getOperator())) {
+				newFilter.setOperator("not like");
+				newFilter.setCaseInsensitive(true);
+			}
 			else if ("=~".equals(filter.getOperator())) {
 				newFilter.setOperator("=");
 				newFilter.setCaseInsensitive(true);
@@ -574,7 +578,7 @@ public class CRUDService implements DefinedService, WebFragment, RESTFragment, A
 					values.add(inputtedValues);
 				}
 				// if we have a like, add "%"
-				if ("like".equals(newFilter.getOperator())) {
+				if ("like".equals(newFilter.getOperator()) || "not like".equals(newFilter.getOperator())) {
 					List<Object> wildCardValues = new ArrayList<Object>();
 					for (Object value : values) {
 						if (value instanceof String && addSqlWildcard) {
