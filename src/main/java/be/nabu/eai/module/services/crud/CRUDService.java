@@ -72,6 +72,7 @@ import be.nabu.libs.types.base.TypeBaseUtils;
 import be.nabu.libs.types.base.ValueImpl;
 import be.nabu.libs.types.mask.MaskedContent;
 import be.nabu.libs.types.properties.CommentProperty;
+import be.nabu.libs.types.properties.DynamicForeignKeyProperty;
 import be.nabu.libs.types.properties.ForeignKeyProperty;
 import be.nabu.libs.types.properties.GeneratedProperty;
 import be.nabu.libs.types.properties.MaxOccursProperty;
@@ -1342,12 +1343,20 @@ public class CRUDService implements DefinedService, WebFragment, RESTFragment, A
 			targetType = targetType.getSuperType();
 		}
 		Element<?> foreignKeyField = null;
+		Element<?> dynamicForeignKeyField = null;
 		// we assume a foreign key exists in the _core_ table
 		for (Element<?> field : TypeUtils.getAllChildren((ComplexType) artifact.getConfig().getCoreType())) {
-			String foreignKey = ValueUtils.getValue(ForeignKeyProperty.getInstance(), field.getProperties());
-			if (foreignKey != null && foreignKeyTargets.contains(foreignKey.split(":")[0])) {
-				foreignKeyField = field;
-				break;
+			if (foreignKeyField == null) {
+				String foreignKey = ValueUtils.getValue(ForeignKeyProperty.getInstance(), field.getProperties());
+				if (foreignKey != null && foreignKeyTargets.contains(foreignKey.split(":")[0])) {
+					foreignKeyField = field;
+				}
+			}
+			if (dynamicForeignKeyField == null) {
+				Boolean isDynamicForeignKey = ValueUtils.getValue(DynamicForeignKeyProperty.getInstance(), field.getProperties());
+				if (isDynamicForeignKey != null && isDynamicForeignKey) {
+					dynamicForeignKeyField = field;
+				}
 			}
 		}
 		// we assume you imported it then?
@@ -1360,6 +1369,10 @@ public class CRUDService implements DefinedService, WebFragment, RESTFragment, A
 					break;
 				}
 			}
+		}
+		// if we have no dedicated foreign key field, check if we have a dynamic foreign key field
+		if (foreignKeyField == null) {
+			foreignKeyField = dynamicForeignKeyField;
 		}
 		if (foreignKeyField == null) {
 			throw new IllegalStateException("Could not find foreign key link from " + artifact.getConfig().getCoreType().getId() + " to any of: " + foreignKeyTargets);
