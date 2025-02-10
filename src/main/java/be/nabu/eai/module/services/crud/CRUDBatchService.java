@@ -24,12 +24,18 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.UUID;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import be.nabu.eai.module.services.crud.CRUDService.CRUDType;
 import be.nabu.eai.repository.EAIRepositoryUtils;
 import be.nabu.eai.repository.EAIResourceRepository;
 import be.nabu.eai.repository.api.ObjectEnricher;
 import be.nabu.libs.artifacts.api.Artifact;
+import be.nabu.libs.property.ValueUtils;
+import be.nabu.libs.property.api.Value;
 import be.nabu.libs.services.ServiceRuntime;
 import be.nabu.libs.services.api.DefinedService;
 import be.nabu.libs.services.api.ExecutionContext;
@@ -50,6 +56,7 @@ import be.nabu.libs.types.base.ComplexElementImpl;
 import be.nabu.libs.types.base.SimpleElementImpl;
 import be.nabu.libs.types.base.ValueImpl;
 import be.nabu.libs.types.mask.MaskedContent;
+import be.nabu.libs.types.properties.GeneratedProperty;
 import be.nabu.libs.types.properties.MaxOccursProperty;
 import be.nabu.libs.types.properties.MinOccursProperty;
 import be.nabu.libs.types.structure.DefinedStructure;
@@ -64,6 +71,7 @@ public class CRUDBatchService implements DefinedService, ObjectEnricher {
 	private DefinedStructure updateOutput;
 	private Structure input, output;
 	private DefinedStructure updateIntermediaryInput;
+	private Logger logger = LoggerFactory.getLogger(getClass());
 
 	public CRUDBatchService(CRUDArtifact artifact, String id, CRUDType type, DefinedStructure updateInput, DefinedStructure updateIntermediaryInput, DefinedStructure updateOutput) {
 		this.artifact = artifact;
@@ -299,6 +307,7 @@ public class CRUDBatchService implements DefinedService, ObjectEnricher {
 
 	@Override
 	public void persist(String typeId, String language, List<Object> instances, String keyField, List<String> fieldsToPersist) throws ServiceException {
+		logger.debug("Persisting " + typeId + " (" + keyField + ") -> " + fieldsToPersist + " -> " + instances.size() + " instances");
 		if (type != CRUDType.UPDATE) {
 			throw new UnsupportedOperationException();	
 		}
@@ -313,6 +322,7 @@ public class CRUDBatchService implements DefinedService, ObjectEnricher {
 			CRUDService service = (CRUDService) EAIResourceRepository.getInstance().resolve(artifact.getId() + ".services.list");
 			List<ComplexContent> contents = new ArrayList<ComplexContent>();
 			Type targetType = null;
+			// instances of the "parent" object which has child objects to persist
 			for (Object single : instances) {
 				if (single == null) {
 					continue;
@@ -334,71 +344,72 @@ public class CRUDBatchService implements DefinedService, ObjectEnricher {
 			for (ComplexContent content : contents) {
 				ids.add(content.get(keyField));
 			}
-			
+			// we select all the entities linked to the list of root parent entities
+			// we split them again based on the foreign key which needs to be in the output (so don't blacklist it in the list output of the crud!)
 			Map<Object, List<Object>> asIs = service.getRecordMap(language, foreignKeyField, ids);
 			List<Object> toDelete = new ArrayList<Object>();
 			List<Object> toUpdate = new ArrayList<Object>();
 			List<Object> toCreate = new ArrayList<Object>();
+			logger.debug("Looping over contents to match data");
 			for (ComplexContent content : contents) {
 				Object primaryKey = content.get(keyField);
-				if (asIs.containsKey(primaryKey)) {
-					for (String field : fieldsToPersist) {
-						Element<?> fieldElement = content.getType().get(field);
-						boolean isList = fieldElement.getType().isList(fieldElement.getProperties());
-						List<Object> currentList = asIs.get(primaryKey);
-						Object toBe = content.get(field);
-						if (isList) {
-							List<Object> toBeList = (List<Object>) toBe;
-							if (toBeList == null || toBeList.isEmpty()) {
-								if (currentList != null && !currentList.isEmpty()) {
-									toDelete.addAll(currentList);
+				logger.debug("Instance with primary key: " + primaryKey + ", exists in as is: " + asIs.containsKey(primaryKey));
+				for (String field : fieldsToPersist) {
+					Element<?> fieldElement = content.getType().get(field);
+					boolean isList = fieldElement.getType().isList(fieldElement.getProperties());
+					List<Object> currentList = asIs.containsKey(primaryKey) ? asIs.get(primaryKey) : new ArrayList<Object>();
+					Object toBe = content.get(field);
+					if (isList) {
+						List<Object> toBeList = (List<Object>) toBe;
+						if (toBeList == null || toBeList.isEmpty()) {
+							if (currentList != null && !currentList.isEmpty()) {
+								toDelete.addAll(currentList);
+							}
+						}
+						else if (currentList == null || currentList.isEmpty()) {
+							toCreate.addAll(toBeList);
+						}
+						else {
+							// TODO: get ids from one and the other, compare to see if we need to update, delete or create
+							Map<Object, Object> currentIds = new HashMap<Object, Object>();
+							for (Object single : currentList) {
+								currentIds.put(service.getPrimaryKey((ComplexContent) single), single);
+							}
+							for (Object single : toBeList) {
+								Object singleKey = service.getPrimaryKey((ComplexContent) single);
+								if (singleKey != null && currentIds.containsKey(singleKey)) {
+									toUpdate.add(single);
+									currentIds.remove(singleKey);
+								}
+								else {
+									toCreate.add(single);
 								}
 							}
-							else if (currentList == null || currentList.isEmpty()) {
-								toCreate.addAll(toBeList);
+							toDelete.addAll(currentIds.values());
+						}
+					}
+					else {
+						Object current = currentList == null || currentList.isEmpty() ? null : currentList.get(0); 
+						if (toBe == null) {
+							if (current != null) {
+								toDelete.add(current);
 							}
-							else {
-								// TODO: get ids from one and the other, compare to see if we need to update, delete or create
-								Map<Object, Object> currentIds = new HashMap<Object, Object>();
-								for (Object single : currentList) {
-									currentIds.put(service.getPrimaryKey((ComplexContent) single), single);
-								}
-								for (Object single : toBeList) {
-									Object singleKey = service.getPrimaryKey((ComplexContent) single);
-									if (currentIds.containsKey(singleKey)) {
-										toUpdate.add(single);
-										currentIds.remove(singleKey);
-									}
-									else {
-										toCreate.add(single);
-									}
-								}
-								toDelete.addAll(currentIds.values());
+						}
+						else if (current == null) {
+							if (toBe != null) {
+								toCreate.add(current);
 							}
 						}
 						else {
-							Object current = currentList == null || currentList.isEmpty() ? null : currentList.get(0); 
-							if (toBe == null) {
-								if (current != null) {
-									toDelete.add(current);
-								}
-							}
-							else if (current == null) {
-								if (toBe != null) {
-									toCreate.add(current);
-								}
+							// TODO: check that anything is actually changed before updating (?)
+							Object currentPrimaryKey = service.getPrimaryKey((ComplexContent) current);
+							Object toBePrimaryKey = service.getPrimaryKey((ComplexContent) toBe);
+							if (toBePrimaryKey.equals(currentPrimaryKey)) {
+								toUpdate.add(current);
 							}
 							else {
-								// TODO: check that anything is actually changed before updating (?)
-								Object currentPrimaryKey = service.getPrimaryKey((ComplexContent) current);
-								Object toBePrimaryKey = service.getPrimaryKey((ComplexContent) toBe);
-								if (toBePrimaryKey.equals(currentPrimaryKey)) {
-									toUpdate.add(current);
-								}
-								else {
-									toDelete.add(current);
-									toCreate.add(toBe);
-								}
+								toDelete.add(current);
+								toCreate.add(toBe);
 							}
 						}
 					}
@@ -414,7 +425,24 @@ public class CRUDBatchService implements DefinedService, ObjectEnricher {
 			}
 			if (!toCreate.isEmpty()) {
 				for (Object single : toCreate) {
-					createSingle(ServiceRuntime.getRuntime().getExecutionContext(), null, null, language, (ComplexContent) single);
+					ComplexContent singleContent = (ComplexContent) single;
+					Element<?> primary = CRUDService.getPrimary((ComplexType) singleContent.getType());
+					if (primary != null) {
+						Object primaryKeyValue = singleContent.get(primary.getName());
+						if (primaryKeyValue == null) {
+							Boolean generated = ValueUtils.getValue(GeneratedProperty.getInstance(), primary.getProperties());
+							if (generated == null || !generated) {
+								Class<?> instanceClass = ((SimpleType<?>) primary.getType()).getInstanceClass();
+								if (UUID.class.isAssignableFrom(instanceClass)) {
+									singleContent.set(primary.getName(), UUID.randomUUID());
+								}
+							}
+						}
+						createSingle(ServiceRuntime.getRuntime().getExecutionContext(), null, null, language, (ComplexContent) single);
+					}
+					else {
+						throw new IllegalArgumentException("The relation to create does not have a primary key field: " + single);
+					}
 				}
 			}
 		}
