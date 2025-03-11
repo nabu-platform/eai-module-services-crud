@@ -432,7 +432,7 @@ public class CRUDService implements DefinedService, WebFragment, RESTFragment, A
 							}
 							// if we have a total row count, build the page object
 							if (result.getTotalRowCount() != null) {
-								output.set("page", Page.build(result.getTotalRowCount(), input == null ? null : (Long) input.get("offset"), limit));
+								output.set("page", Page.build(result.getTotalRowCount(), input == null ? null : (Long) input.get("offset"), limit, true));
 							}
 							else {
 								Long rowCount = result.getRowCount();
@@ -440,7 +440,7 @@ public class CRUDService implements DefinedService, WebFragment, RESTFragment, A
 									rowCount = result.getResults() != null ? result.getResults().size() : 0l;
 								}
 								// if we pass in an offset, we can calculate the page we are on
-								output.set("page", Page.build(rowCount.intValue(), input == null ? null : (Long) input.get("offset"), limit));
+								output.set("page", Page.build(rowCount.intValue(), input == null ? null : (Long) input.get("offset"), limit, false));
 								//output.set("page", Page.build(rowCount, 0l, rowCount.intValue()));
 							}
 						}

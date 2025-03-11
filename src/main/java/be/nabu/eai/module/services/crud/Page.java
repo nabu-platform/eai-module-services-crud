@@ -22,7 +22,7 @@ public class Page implements be.nabu.eai.repository.api.Page {
 	private int current, total;
 	private long totalRowCount, pageSize, rowOffset;
 
-	public static Page build(long totalAmount, Long offset, Integer pageSize) {
+	public static Page build(long totalAmount, Long offset, Integer pageSize, boolean hasTotalCount) {
 		if (offset == null) {
 			offset = 0l;
 		}
@@ -30,7 +30,7 @@ public class Page implements be.nabu.eai.repository.api.Page {
 		page.setRowOffset(offset);
 		page.setPageSize(pageSize == null ? totalAmount : pageSize);
 		page.setTotalRowCount(totalAmount);
-		page.setTotal(pageSize == null ? 1 : (int) Math.ceil(((double) totalAmount) / pageSize));
+		page.setTotal(hasTotalCount ? pageSize == null ? 1 : (int) Math.ceil(((double) totalAmount) / pageSize) : 0);
 		page.setCurrent(pageSize == null ? 0 : (int) Math.floor(((double) offset) / pageSize));
 		return page;
 	}
