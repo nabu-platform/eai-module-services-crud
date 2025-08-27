@@ -1105,7 +1105,14 @@ public class CRUDService implements DefinedService, WebFragment, RESTFragment, A
 						if (element == null) {
 							continue;
 						}
-						SimpleElementImpl childElement = new SimpleElementImpl(filter.getAlias() == null ? filter.getKey() : filter.getAlias(), (SimpleType<?>) element.getType(), input, new ValueImpl<Integer>(MinOccursProperty.getInstance(), 0));
+						SimpleElementImpl childElement;
+						// every other "new operator" that you typed is also considered to be an "is" check, like if you manually type "> current_timestamp"
+						if ("is null".equals(filter.getOperator()) || "is not null".equals(filter.getOperator()) || !operators.contains(filter.getOperator())) {
+							childElement = new SimpleElementImpl(filter.getAlias() == null ? filter.getKey() : filter.getAlias(), (SimpleType<Boolean>) SimpleTypeWrapperFactory.getInstance().getWrapper().wrap(Boolean.class), input, new ValueImpl<Integer>(MinOccursProperty.getInstance(), 0));	
+						}
+						else {
+							childElement = new SimpleElementImpl(filter.getAlias() == null ? filter.getKey() : filter.getAlias(), (SimpleType<?>) element.getType(), input, new ValueImpl<Integer>(MinOccursProperty.getInstance(), 0));
+						}
 						// we can reuse the same filter with the same name for multiple matches, we however only want to expose it once
 						if (alreadyDefined.contains(childElement.getName())) {
 							continue;
