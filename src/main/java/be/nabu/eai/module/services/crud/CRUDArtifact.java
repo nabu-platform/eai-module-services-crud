@@ -26,6 +26,7 @@ import be.nabu.eai.module.services.crud.CRUDConfiguration.ForeignNameField;
 import be.nabu.eai.module.services.crud.api.CRUDListAction;
 import be.nabu.eai.module.web.application.MountableWebFragmentProvider;
 import be.nabu.eai.module.web.application.WebFragment;
+import be.nabu.eai.repository.api.Entry;
 import be.nabu.eai.repository.api.Repository;
 import be.nabu.eai.repository.artifacts.jaxb.JAXBArtifact;
 import be.nabu.libs.artifacts.api.Artifact;
@@ -60,12 +61,29 @@ public class CRUDArtifact extends JAXBArtifact<CRUDConfiguration> implements Mou
 	@Override
 	public List<WebFragment> getWebFragments() {
 		List<WebFragment> fragments = new ArrayList<WebFragment>();
-		for (DefinedService service : getRepository().getArtifacts(DefinedService.class)) {
-			if (service.getId().startsWith(getId() + ".") && service instanceof WebFragment) {
-				fragments.add((WebFragment) service);
+		// start at own entry
+		Entry entry = getRepository().getEntry(getId());
+		scan(entry, fragments);
+//		for (DefinedService service : getRepository().getArtifacts(DefinedService.class)) {
+//			if (service.getId().startsWith(getId() + ".") && service instanceof WebFragment) {
+//				fragments.add((WebFragment) service);
+//			}
+//		}
+		return fragments;
+	}
+	
+	private void scan(Entry entry, List<WebFragment> fragments) {
+		try {
+			for (Entry child : entry) {
+				if (child.isNode() && DefinedService.class.isAssignableFrom(child.getNode().getArtifactClass()) && WebFragment.class.isAssignableFrom(child.getNode().getArtifactClass())) {
+					fragments.add((WebFragment) child.getNode().getArtifact());
+				}
+				scan(child, fragments);
 			}
 		}
-		return fragments;
+		catch (Exception e) {
+			throw new RuntimeException(e);
+		}
 	}
 
 	@Override
