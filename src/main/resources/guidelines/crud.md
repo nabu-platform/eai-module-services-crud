@@ -40,6 +40,10 @@ General rules:
 - `filters`: Default configured CRUD filters.
 - `views`: Additional list/get views beside the default view. These create additional generated services.
 
+### Filters
+
+Filters (unless explicitly defined otherwise) are an `AND`, not an `OR`.
+
 ### Roles
 - `createRole`: Role allowed to create records.
 - `updateRole`: Role allowed to update records.
