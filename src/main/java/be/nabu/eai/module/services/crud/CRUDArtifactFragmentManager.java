@@ -380,11 +380,8 @@ public class CRUDArtifactFragmentManager extends BaseNodeMetadataArtifactFragmen
 	}
 
 	private String toXml(Document document) throws Exception {
-		javax.xml.transform.Transformer transformer = javax.xml.transform.TransformerFactory.newInstance().newTransformer();
-		transformer.setOutputProperty(javax.xml.transform.OutputKeys.OMIT_XML_DECLARATION, "yes");
-		transformer.setOutputProperty(javax.xml.transform.OutputKeys.INDENT, "yes");
-		java.io.StringWriter writer = new java.io.StringWriter();
-		transformer.transform(new javax.xml.transform.dom.DOMSource(document), new javax.xml.transform.stream.StreamResult(writer));
-		return writer.toString();
+		ByteArrayOutputStream output = new ByteArrayOutputStream();
+		EAIRepositoryUtils.prettyPrint(document, output);
+		return new String(output.toByteArray(), StandardCharsets.UTF_8);
 	}
 }
