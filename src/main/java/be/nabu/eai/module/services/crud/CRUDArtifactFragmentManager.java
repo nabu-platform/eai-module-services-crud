@@ -132,6 +132,7 @@ public class CRUDArtifactFragmentManager extends BaseNodeMetadataArtifactFragmen
 			CRUDArtifact candidate = new CRUDArtifact(artifact.getId(), entry.getContainer(), entry.getRepository());
 			Document currentDocument = parseDocument(marshalRawFragment(artifact));
 			Document document = parseDocument(newContent);
+			removeLegacyPermissionContextFields(document.getDocumentElement());
 			retainField(currentDocument.getDocumentElement(), document.getDocumentElement(), document, BROADCAST_UPDATE);
 			retainField(currentDocument.getDocumentElement(), document.getDocumentElement(), document, BROADCAST_CREATE);
 			retainField(currentDocument.getDocumentElement(), document.getDocumentElement(), document, HOOKS);
@@ -285,7 +286,6 @@ public class CRUDArtifactFragmentManager extends BaseNodeMetadataArtifactFragmen
 		config.setUseWebApplicationAsPermissionContext(false);
 		config.setUseProjectAsPermissionContext(false);
 		config.setUseGlobalPermissionContext(false);
-		config.setUseAsAuthorizationServiceContext(false);
 		if (value == null || value.isEmpty()) {
 			return;
 		}
@@ -300,9 +300,6 @@ public class CRUDArtifactFragmentManager extends BaseNodeMetadataArtifactFragmen
 		}
 		else if ("GLOBAL".equals(value)) {
 			config.setUseGlobalPermissionContext(true);
-		}
-		else if ("AUTHORIZATION_SERVICE_CONTEXT".equals(value)) {
-			config.setUseAsAuthorizationServiceContext(true);
 		}
 		else {
 			validations.add(new ValidationMessage(ValidationMessage.Severity.ERROR, "Unsupported permissionContextType: " + value));
@@ -331,15 +328,21 @@ public class CRUDArtifactFragmentManager extends BaseNodeMetadataArtifactFragmen
 		if (config.isUseGlobalPermissionContext()) {
 			return "GLOBAL";
 		}
-		if (config.isUseAsAuthorizationServiceContext()) {
-			return "AUTHORIZATION_SERVICE_CONTEXT";
-		}
 		return null;
 	}
 
 	private String removePermissionContextType(Document document) throws Exception {
-		removeDirectChild(document.getDocumentElement(), PERMISSION_CONTEXT_TYPE);
+		Element root = document.getDocumentElement();
+		removeDirectChild(root, PERMISSION_CONTEXT_TYPE);
+		removeLegacyPermissionContextFields(root);
 		return toXml(document);
+	}
+
+	private void removeLegacyPermissionContextFields(Element root) {
+		removeDirectChild(root, "useServiceContextAsPermissionContext");
+		removeDirectChild(root, "useWebApplicationAsPermissionContext");
+		removeDirectChild(root, "useProjectAsPermissionContext");
+		removeDirectChild(root, "useGlobalPermissionContext");
 	}
 
 	private Document parseDocument(String content) throws Exception {
